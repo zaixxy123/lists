@@ -3,7 +3,7 @@
 -- Shared registries live inside strategies/config/.
 
 local ROOT =
-    "https://raw.githubusercontent.com/RyaaV2/lists/refs/heads/main/strategies/"
+    "https://raw.githubusercontent.com/zaixxy123/lists/refs/heads/main/strategies/"
 
 local function LoadConfig(path)
     local url = ROOT .. path
