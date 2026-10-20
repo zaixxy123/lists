@@ -1,6 +1,6 @@
 -- Auto Progress TDS Strategy API
 -- Upload this file to:
---   RyaaV2/lists/apis/tds.lua
+--   zaixxy123/lists/apis/tds.lua
 --
 -- Only the TDS: strategy methods live here.
 -- Main-script helpers/state are passed in through Context.
