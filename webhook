@@ -2201,15 +2201,6 @@ local function BuildAutoMaxEmbed(
         )
     end
 
-    local progressTarget =
-        GetAutoMaxProgressTarget(
-            snapshot
-        )
-
-    local target =
-        progressTarget == nil
-        and GetTargetInfo("auto_max")
-        or nil
 
     AddField(
         fields,
@@ -2221,13 +2212,6 @@ local function BuildAutoMaxEmbed(
         true
     )
 
-    AddField(
-        fields,
-        "🎯 Current Target",
-        progressTarget
-            or FormatTarget(target),
-        true
-    )
 
     AddField(
         fields,
@@ -2458,12 +2442,6 @@ local function BuildAutoBuyEmbed(
         true
     )
 
-    AddField(
-        fields,
-        "🎯 Current Target",
-        FormatTarget(target),
-        true
-    )
 
     AddField(
         fields,
