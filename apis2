@@ -37,7 +37,7 @@ local StrategyConfig = {
 
 pcall(function()
     local source = game:HttpGet(
-        "https://raw.githubusercontent.com/RyaaV2/lists/refs/heads/main/strategies/config/towers.lua"
+        "https://raw.githubusercontent.com/zaixxy123/lists/refs/heads/main/strategies/config/towers.lua"
     )
 
     local chunk = loadstring(source)

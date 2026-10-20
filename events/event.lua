@@ -11,7 +11,7 @@ local function GetNightModule(night)
     local number = type(night) == "string" and night:match("^Night ([1-9]%d*)$")
     if not number then return nil end
     if NightCache[number] then return NightCache[number] end
-    local url = "https://raw.githubusercontent.com/RyaaV2/lists/refs/heads/main/events/nights/night" .. number .. ".lua"
+    local url = "https://raw.githubusercontent.com/zaixxy123/lists/refs/heads/main/events/nights/night" .. number .. ".lua"
     local ok, module = pcall(function()
         return loadstring(game:HttpGet(url))()
     end)

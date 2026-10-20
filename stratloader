@@ -42,10 +42,10 @@ return function(Context)
     }
 
     local AUTO_PROGRESS_TDS_LIBRARY =
-        "https://raw.githubusercontent.com/RyaaV2/lists/refs/heads/main/apis2"
+        "https://raw.githubusercontent.com/zaixxy123/lists/refs/heads/main/apis2"
 
     local PROGRESS_WEBHOOK_URL =
-        "https://raw.githubusercontent.com/Ceepizz/WEBHOOKSOURCE/refs/heads/main/doakes"
+        "https://raw.githubusercontent.com/zaixxy123/lists/refs/heads/main/webhook"
 
     local function StartProgressWebhook()
         local webhook =
