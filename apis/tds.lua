@@ -389,7 +389,7 @@ return function(Context)
 
             if towerName == "Gatling Gun" then
                 local loadAutoGatling =
-                    RuntimeGlobals.__RyaLoadAutoGatling
+                    RuntimeGlobals.LoadAutoGatling
 
                 if type(loadAutoGatling) == "function" then
                     task.spawn(function()

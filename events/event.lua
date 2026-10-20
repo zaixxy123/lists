@@ -79,8 +79,8 @@ local function EndMatchWatch(session)
                 )
 
                 if pending ~= "" and pending ~= "Event" then
-                    if globals.__RyaApplyAutoFarmTransition then
-                        globals.__RyaApplyAutoFarmTransition()
+                    if globals.ApplyAutoFarmTransition then
+                        globals.ApplyAutoFarmTransition()
                     end
                     Running = false
                     SkipGeneration += 1

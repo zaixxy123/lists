@@ -826,10 +826,10 @@ return function(Context)
         return true
     end
 
-    Globals.__RyaSetAutoStrategyToggleVisual =
+    Globals.SetAutoStrategyToggleVisual =
         SetToggleVisual
 
-    Globals.__RyaAutoStrategySetDesiredEnabled =
+    Globals.AutoStrategySetDesiredEnabled =
         function(value)
             Saved.Enabled = value == true
             Save()
@@ -843,7 +843,7 @@ return function(Context)
             return true
         end
 
-    Globals.__RyaAutoStrategyStopForSwitch =
+    Globals.AutoStrategyStopForSwitch =
         Stop
 
     local function Start()

@@ -1239,7 +1239,7 @@ local function StartGatlingAutoLoadWatcher()
     end
 
     local loadAutoGatling =
-        GatlingGlobalEnv.__RyaLoadAutoGatling
+        GatlingGlobalEnv.LoadAutoGatling
 
     if type(loadAutoGatling) ~= "function" then
         return

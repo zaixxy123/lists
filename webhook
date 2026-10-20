@@ -249,12 +249,12 @@ local function GetProgressSnapshot()
     end
 
     if game.PlaceId == LOBBY_PLACE_ID
-        and Globals.__RyaGetLobbyCurrencyBalance then
+        and Globals.GetLobbyCurrencyBalance then
 
         local okCoins, lobbyCoins =
             pcall(function()
                 return
-                    Globals.__RyaGetLobbyCurrencyBalance(
+                    Globals.GetLobbyCurrencyBalance(
                         "Coins"
                     )
             end)
@@ -269,7 +269,7 @@ local function GetProgressSnapshot()
         local okGems, lobbyGems =
             pcall(function()
                 return
-                    Globals.__RyaGetLobbyCurrencyBalance(
+                    Globals.GetLobbyCurrencyBalance(
                         "Gems"
                     )
             end)
@@ -1546,11 +1546,11 @@ local function GetMatchResult(rep)
 end
 
 local function GetAutoProgressTargetLevel()
-    if Globals.__RyaGetAutoProgressTargetLevel then
+    if Globals.GetAutoProgressTargetLevel then
         local ok, result =
             pcall(function()
                 return
-                    Globals.__RyaGetAutoProgressTargetLevel()
+                    Globals.GetAutoProgressTargetLevel()
             end)
 
         if ok
