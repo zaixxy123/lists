@@ -1,0 +1,38 @@
+TDS:Loadout("Soldier", "None", "None", "None", "None")
+
+TDS:Mode("Easy")
+TDS:GameInfo("Black Spot Exchange")
+
+TDS:VoteSkip()
+
+TDS:Place("Soldier", -6.146278381347656, 1.9991352558135986, 2.760941505432129, true) --1
+TDS:Ready()
+
+TDS:Place("Soldier", 6.282851696014404, 1.9991353750228882, 2.092632293701172, true) --2
+TDS:Place("Soldier", -6.146278381347656, 1.9991352558135986, 2.760941505432129, true) --3
+TDS:Place("Soldier", 6.282851696014404, 1.9991353750228882, 2.092632293701172, true) --4
+TDS:Place("Soldier", -6.146278381347656, 1.9991352558135986, 2.760941505432129, true) --5
+TDS:Place("Soldier", 6.282851696014404, 1.9991353750228882, 2.092632293701172, true) --6
+
+for _ = 1, 3 do
+    for index = 1, 6 do
+        TDS:Upgrade(index)
+    end
+end
+
+TDS:Place("Soldier", -6.146278381347656, 1.9991352558135986, 2.760941505432129, true) --7
+TDS:Place("Soldier", 6.282851696014404, 1.9991353750228882, 2.092632293701172, true) --8
+TDS:Place("Soldier", -6.146278381347656, 1.9991352558135986, 2.760941505432129, true) --9
+TDS:Place("Soldier", 6.282851696014404, 1.9991353750228882, 2.092632293701172, true) --10
+TDS:Place("Soldier", -6.146278381347656, 1.9991352558135986, 2.760941505432129, true) --11
+TDS:Place("Soldier", 6.282851696014404, 1.9991353750228882, 2.092632293701172, true) --12
+
+for _ = 1, 3 do
+    for index = 7, 12 do
+        TDS:Upgrade(index)
+    end
+end
+
+for index = 1, 12 do
+    TDS:Upgrade(index)
+end

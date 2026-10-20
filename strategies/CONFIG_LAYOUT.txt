@@ -1,0 +1,50 @@
+RYA STRATEGY CONFIG LAYOUT
+
+config.lua
+- Master assembler only. Usually you do NOT edit this.
+
+config/routes.lua
+- RouteKey registry.
+- Examples: Easy.Win, Easy.Lose, Molten, Hardcore, Fallen, Frost.
+- Add a new RouteKey here when needed.
+
+config/towers.lua
+- Tower Priority
+- Tower Type / Currency / Price / Level
+- GrindRules
+- FarmBehavior
+
+config/progression.lua
+- AutoFarmUntilGatling level rules
+- AutoMaxAccount level rules
+
+easy/config.lua
+molten/config.lua
+hardcore/config.lua
+fallen/config.lua
+frost/config.lua
+- Matchmaking
+- RequiredTowers
+- Priority maps
+- Map -> strategy file paths
+
+story/config.lua
+- Story mission order and strategy paths
+
+ADDING A NEW ROUTE (example Casual)
+1. Create strategies/casual/config.lua
+2. Put the Casual map strategy .lua files in strategies/casual/
+3. Add Casual to config/routes.lua
+4. Add `Casual = LoadConfig("casual/config.lua")` to the master config.lua
+5. Use Route = "Casual" from progression/tower GrindRules.
+
+IMPORTANT
+- Existing map strategy files were not edited by this reorganization.
+- The master table returned to the controller keeps the same Easy/Molten/Hardcore/Fallen/Frost/etc shape.
+
+config/skilltree.lua = Auto Max skill-node priority and target levels.
+
+Easy.Starter: Scout-only Easy WIN farm used to afford Soldier in Win progression.
+Casual: route/config scaffold added; add maps/strategies before routing progression into it.
+
+Late grind controller: strategies/lategrind.lua

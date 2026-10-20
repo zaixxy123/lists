@@ -1,0 +1,1864 @@
+return function(Context)
+    Context = type(Context) == "table" and Context or {}
+
+    local Window = Context.Window
+    local Library = Context.Library
+    local Globals = Context.Globals or getgenv()
+    local CanEnable = Context.CanEnable
+    local RequestDisable = Context.RequestDisable
+    local SetMainStatus = Context.SetMainStatus
+    local BackToLobby = Context.BackToLobby
+    local Players = game:GetService("Players")
+    local HttpService = game:GetService("HttpService")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local MarketplaceService = game:GetService("MarketplaceService")
+    local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
+
+    if not Window or not Library then
+        return nil
+    end
+
+    local WORKSPACE_FOLDER = "AutoStrategy"
+    local SETTINGS_FILE =
+        "AutoProgress_" .. tostring(LocalPlayer.Name) .. ".json"
+
+    local function IsLobby()
+        local playerGui =
+            LocalPlayer:FindFirstChild(
+                "PlayerGui"
+            )
+
+        return playerGui
+            and playerGui:FindFirstChild(
+                "ReactLobbyHud"
+            ) ~= nil
+    end
+
+    local ORIGINAL_TDS_LIBRARIES = {
+        "https://f.spacehub.wtf/Scripts/TDS/Recorders/Library.lua",
+        "https://getaether.cc/loader.lua",
+        "https://raw.githubusercontent.com/DuxiiT/auto-strat/refs/heads/main/Library.lua",
+        "https://raw.githubusercontent.com/DuxiiT/auto-strat/main/Library.lua",
+    }
+
+    local AUTO_PROGRESS_TDS_LIBRARY =
+        "https://raw.githubusercontent.com/RyaaV2/lists/refs/heads/main/apis2"
+
+    local PROGRESS_WEBHOOK_URL =
+        "https://raw.githubusercontent.com/Ceepizz/WEBHOOKSOURCE/refs/heads/main/doakes"
+
+    local function StartProgressWebhook()
+        local webhook =
+            type(shared.ProgressWebhook) == "table"
+            and shared.ProgressWebhook
+            or nil
+
+        if not webhook then
+            local ok, result =
+                pcall(function()
+                    return loadstring(
+                        game:HttpGet(
+                            PROGRESS_WEBHOOK_URL
+                        )
+                    )()
+                end)
+
+            if ok
+                and type(result) == "table" then
+
+                webhook = result
+            elseif type(shared.ProgressWebhook) == "table" then
+                webhook = shared.ProgressWebhook
+            end
+        end
+
+        if not webhook then
+            return false
+        end
+
+        local url =
+            tostring(
+                Globals.Webhook
+                or Globals.WebhookURL
+                or ""
+            )
+
+        if url ~= ""
+            and webhook.SetWebhook then
+
+            pcall(function()
+                webhook.SetWebhook(url)
+            end)
+        end
+
+        if webhook.Start then
+            local ok, result =
+                pcall(function()
+                    return webhook.Start()
+                end)
+
+            return ok and result ~= false
+        end
+
+        return false
+    end
+
+    local Saved = {
+        Enabled = false,
+        AutoRestartStrategy = false,
+        AutoSkipStrategy = false,
+        SelectedFile = ""
+    }
+
+    local function LoadSaved()
+        if type(isfile) ~= "function"
+            or type(readfile) ~= "function"
+            or not isfile(SETTINGS_FILE) then
+
+            return
+        end
+
+        pcall(function()
+            local data =
+                HttpService:JSONDecode(
+                    readfile(SETTINGS_FILE)
+                )
+
+            if type(data) ~= "table" then
+                return
+            end
+
+            if type(data.AutoStrategyEnabled) == "boolean" then
+                Saved.Enabled =
+                    data.AutoStrategyEnabled
+            end
+
+            if type(data.AutoRestartStrategy) == "boolean" then
+                Saved.AutoRestartStrategy =
+                    data.AutoRestartStrategy
+            end
+
+            if type(data.AutoStrategyAutoSkip) == "boolean" then
+                Saved.AutoSkipStrategy =
+                    data.AutoStrategyAutoSkip
+            end
+
+            if type(data.AutoStrategySelectedFile) == "string" then
+                Saved.SelectedFile =
+                    data.AutoStrategySelectedFile
+            end
+        end)
+    end
+
+    local function Save()
+        if type(writefile) ~= "function" then
+            return
+        end
+
+        pcall(function()
+            local data = {}
+
+            if type(isfile) == "function"
+                and type(readfile) == "function"
+                and isfile(SETTINGS_FILE) then
+
+                local ok, existing =
+                    pcall(function()
+                        return HttpService:JSONDecode(
+                            readfile(SETTINGS_FILE)
+                        )
+                    end)
+
+                if ok
+                    and type(existing) == "table" then
+
+                    data = existing
+                end
+            end
+
+            data.AutoStrategyEnabled =
+                Saved.Enabled == true
+
+            data.AutoRestartStrategy =
+                Saved.AutoRestartStrategy == true
+
+            data.AutoStrategyAutoSkip =
+                Saved.AutoSkipStrategy == true
+
+            data.AutoStrategySelectedFile =
+                tostring(
+                    Saved.SelectedFile or ""
+                )
+
+            writefile(
+                SETTINGS_FILE,
+                HttpService:JSONEncode(
+                    data
+                )
+            )
+        end)
+    end
+
+    LoadSaved()
+
+    Globals.__RyaAutoStrategyForceAutoSkip =
+        Saved.AutoSkipStrategy == true
+
+    local SelectedStrategyFile = nil
+    local AutoStrategyThread = nil
+    local AutoStrategyToggle = nil
+    local AutoRestartStrategyToggle = nil
+    local AutoSkipStrategyToggle = nil
+    local RestartInProgress = false
+    local ReturnToLobbyInProgress = false
+    local RunningStrategyFile = nil
+    local PendingStrategyChange = false
+
+    local AutoStrategy =
+        Window:Tab({
+            Title = "Auto Strategy",
+            Icon = "bot"
+        })
+
+    AutoStrategy:Section({
+        Title = "Auto Strategy"
+    })
+
+    local function SetStatus(_text)
+        -- Status UI removed.
+    end
+
+    local function UpdateMainStatus(text)
+        text = tostring(text)
+
+        local cleanText =
+            text:gsub(
+                "^Status:%s*",
+                ""
+            )
+
+        Globals.__RyaAutoStrategyStatus =
+            cleanText
+
+        if AutoStrategy
+            and AutoStrategy.SetStatus then
+
+            pcall(function()
+                AutoStrategy:SetStatus(
+                    cleanText
+                )
+            end)
+        end
+
+        if type(SetMainStatus) == "function" then
+            pcall(
+                SetMainStatus,
+                text
+            )
+        end
+    end
+
+    local function Notify(content, duration)
+        Library:Notify({
+            Title = "Auto Strategy",
+            Content = tostring(content),
+            Duration = duration or 3
+        })
+    end
+
+    local function IsSupportedFile(path)
+        path =
+            tostring(
+                path or ""
+            ):lower()
+
+        return
+            path:sub(-4) == ".lua"
+            or path:sub(-5) == ".luau"
+            or path:sub(-4) == ".txt"
+    end
+
+    local function GetFileName(path)
+        path =
+            tostring(
+                path or ""
+            )
+
+        return
+            path:match(
+                "([^/\\]+)$"
+            )
+            or path
+    end
+
+    local function TransformStrategySource(source)
+        source =
+            tostring(
+                source or ""
+            )
+
+        local output = {}
+
+        for line in (
+            source .. "\n"
+        ):gmatch("(.-)\r?\n") do
+            local trimmed =
+                line:match(
+                    "^%s*(.-)%s*$"
+                )
+                or line
+
+            local isGlobalAssignment =
+                trimmed:match(
+                    "^_G%.[%w_]+%s*="
+                ) ~= nil
+
+            if not isGlobalAssignment then
+                output[#output + 1] =
+                    line
+            end
+        end
+
+        source =
+            table.concat(
+                output,
+                "\n"
+            )
+
+        local function ReplacePlain(text, oldValue, newValue)
+            local startIndex =
+                string.find(
+                    text,
+                    oldValue,
+                    1,
+                    true
+                )
+
+            while startIndex do
+                text =
+                    text:sub(
+                        1,
+                        startIndex - 1
+                    )
+                    .. newValue
+                    .. text:sub(
+                        startIndex
+                        + #oldValue
+                    )
+
+                startIndex =
+                    string.find(
+                        text,
+                        oldValue,
+                        startIndex
+                        + #newValue,
+                        true
+                    )
+            end
+
+            return text
+        end
+
+        for _, libraryUrl in ipairs(
+            ORIGINAL_TDS_LIBRARIES
+        ) do
+            source =
+                ReplacePlain(
+                    source,
+                    libraryUrl,
+                    AUTO_PROGRESS_TDS_LIBRARY
+                )
+        end
+
+        return source
+    end
+
+    local function EnsureFolder()
+        if type(isfolder) == "function" then
+            local ok, exists =
+                pcall(
+                    isfolder,
+                    WORKSPACE_FOLDER
+                )
+
+            if ok
+                and exists then
+
+                return true
+            end
+        end
+
+        if type(makefolder) == "function" then
+            local ok =
+                pcall(
+                    makefolder,
+                    WORKSPACE_FOLDER
+                )
+
+            if ok then
+                return true
+            end
+        end
+
+        return false
+    end
+
+    local function ScanFiles()
+        if type(listfiles) ~= "function" then
+            return nil,
+                "listfiles is not supported by this executor"
+        end
+
+        EnsureFolder()
+
+        local ok, files =
+            pcall(function()
+                return listfiles(
+                    WORKSPACE_FOLDER
+                )
+            end)
+
+        if not ok
+            or type(files) ~= "table" then
+
+            return nil,
+                tostring(files)
+        end
+
+        local results = {}
+
+        for _, path in ipairs(files) do
+            local isFile = true
+
+            if type(isfile) == "function" then
+                local fileOk, fileResult =
+                    pcall(
+                        isfile,
+                        path
+                    )
+
+                isFile =
+                    fileOk
+                    and fileResult == true
+
+            elseif type(isfolder) == "function" then
+                local folderOk, folderResult =
+                    pcall(
+                        isfolder,
+                        path
+                    )
+
+                if folderOk
+                    and folderResult == true then
+
+                    isFile = false
+                end
+            end
+
+            if isFile
+                and IsSupportedFile(path) then
+
+                results[#results + 1] =
+                    tostring(path)
+            end
+        end
+
+        table.sort(
+            results,
+            function(a, b)
+                return
+                    string.lower(a)
+                    < string.lower(b)
+            end
+        )
+
+        return results
+    end
+
+    local FilePathByName = {}
+
+    local function BuildDisplayFiles(files)
+        for key in pairs(
+            FilePathByName
+        ) do
+            FilePathByName[key] = nil
+        end
+
+        local displayFiles = {}
+
+        for _, path in ipairs(
+            files or {}
+        ) do
+            local fileName =
+                GetFileName(path)
+
+            FilePathByName[fileName] =
+                tostring(path)
+
+            displayFiles[
+                #displayFiles + 1
+            ] = fileName
+        end
+
+        return displayFiles
+    end
+
+    local InitialFiles =
+        ScanFiles()
+
+    local InitialDisplayFiles =
+        type(InitialFiles) == "table"
+        and BuildDisplayFiles(
+            InitialFiles
+        )
+        or nil
+
+    if type(InitialFiles) == "table"
+        and #InitialFiles > 0 then
+
+        local savedPath =
+            tostring(
+                Saved.SelectedFile or ""
+            )
+
+        if savedPath ~= ""
+            and type(isfile) == "function"
+            and isfile(savedPath)
+            and IsSupportedFile(savedPath) then
+
+            SelectedStrategyFile =
+                savedPath
+        else
+            SelectedStrategyFile =
+                InitialFiles[1]
+
+            Saved.SelectedFile =
+                SelectedStrategyFile
+
+            Save()
+        end
+    end
+
+    local selectedDisplayValue = nil
+
+    if SelectedStrategyFile then
+        selectedDisplayValue =
+            GetFileName(
+                SelectedStrategyFile
+            )
+    end
+
+    local StrategyDropdown =
+        AutoStrategy:Dropdown({
+            Title = "Strategy File",
+            Desc = "Select a strategy file from Workspace/Auto Strategy",
+            List =
+                type(InitialDisplayFiles) == "table"
+                and #InitialDisplayFiles > 0
+                and InitialDisplayFiles
+                or {
+                    "<no files found>"
+                },
+            Value =
+                selectedDisplayValue,
+            Searchable = true,
+            Callback = function(value)
+                local selected =
+                    type(value) == "table"
+                    and value[1]
+                    or value
+
+                if selected
+                    and selected ~= "<no files found>" then
+
+                    local fileName =
+                        tostring(selected)
+
+                    SelectedStrategyFile =
+                        FilePathByName[
+                            fileName
+                        ]
+
+                    if SelectedStrategyFile then
+                        Saved.SelectedFile =
+                            SelectedStrategyFile
+
+                        Save()
+
+                        if Globals.__RyaAutoStrategyEnabled == true
+                            and RunningStrategyFile then
+
+                            if IsLobby() then
+                                PendingStrategyChange = false
+                                RunningStrategyFile =
+                                    SelectedStrategyFile
+
+                                UpdateMainStatus(
+                                    "Status: Running Auto Strategy"
+                                )
+                            else
+                                PendingStrategyChange =
+                                    SelectedStrategyFile
+                                    ~= RunningStrategyFile
+
+                                if PendingStrategyChange then
+                                    UpdateMainStatus(
+                                        "Status: Strategy Changed Waiting Game to finish"
+                                    )
+                                else
+                                    UpdateMainStatus(
+                                        "Status: Running Auto Strategy"
+                                    )
+                                end
+                            end
+                        end
+
+                        SetStatus(
+                            "Selected "
+                            .. fileName
+                        )
+                    end
+                else
+                    SelectedStrategyFile = nil
+                end
+            end
+        })
+
+    local function SetDropdownValues(values)
+        if StrategyDropdown.SetValues then
+            StrategyDropdown:SetValues(
+                values
+            )
+        elseif StrategyDropdown.SetList then
+            StrategyDropdown:SetList(
+                values
+            )
+        end
+    end
+
+    local function SetDropdownValue(value)
+        if StrategyDropdown.SetValue then
+            StrategyDropdown:SetValue(
+                value
+            )
+        elseif StrategyDropdown.Set then
+            StrategyDropdown:Set(
+                value
+            )
+        end
+    end
+
+    local RefreshingFiles = false
+    local LastDisplaySignature = ""
+
+    local function RefreshFiles()
+        if RefreshingFiles then
+            return false
+        end
+
+        RefreshingFiles = true
+
+        task.spawn(function()
+            local files, err =
+                ScanFiles()
+
+            if not files then
+                Notify(
+                    "Workspace scan failed: "
+                    .. tostring(err),
+                    5
+                )
+
+                RefreshingFiles = false
+                return
+            end
+
+            if #files == 0 then
+                SelectedStrategyFile = nil
+                Saved.SelectedFile = ""
+                Save()
+
+                local signature =
+                    "<no files found>"
+
+                if signature ~= LastDisplaySignature then
+                    SetDropdownValues({
+                        "<no files found>"
+                    })
+
+                    LastDisplaySignature =
+                        signature
+                end
+
+                RefreshingFiles = false
+                return
+            end
+
+            local displayFiles =
+                BuildDisplayFiles(
+                    files
+                )
+
+            local signature =
+                table.concat(
+                    displayFiles,
+                    "\0"
+                )
+
+            if signature ~= LastDisplaySignature then
+                SetDropdownValues(
+                    displayFiles
+                )
+
+                LastDisplaySignature =
+                    signature
+            end
+
+            local running =
+                Globals.__RyaAutoStrategyEnabled == true
+
+            local keepCurrent =
+                SelectedStrategyFile
+                and (
+                    running
+                    or (
+                        type(isfile) == "function"
+                        and isfile(
+                            SelectedStrategyFile
+                        )
+                    )
+                )
+
+            if not keepCurrent then
+                SelectedStrategyFile =
+                    files[1]
+            end
+
+            Saved.SelectedFile =
+                SelectedStrategyFile
+
+            Save()
+
+            -- While a strategy is running, refresh only the list.
+            -- Never auto-switch the selected/running strategy.
+            if not running then
+                SetDropdownValue(
+                    GetFileName(
+                        SelectedStrategyFile
+                    )
+                )
+            end
+
+            RefreshingFiles = false
+        end)
+
+        return true
+    end
+
+    -- Seed signature so the first manual refresh does not rebuild
+    -- the dropdown when nothing changed.
+    if type(InitialDisplayFiles) == "table" then
+        LastDisplaySignature =
+            table.concat(
+                InitialDisplayFiles,
+                "\0"
+            )
+    end
+
+    local IgnoreAutoStrategyToggleCallbacks = 0
+
+    local function SetToggleVisual(value)
+        if not AutoStrategyToggle then
+            return
+        end
+
+        IgnoreAutoStrategyToggleCallbacks += 1
+
+        pcall(function()
+            if AutoStrategyToggle.SetValue then
+                AutoStrategyToggle:SetValue(
+                    value
+                )
+            elseif AutoStrategyToggle.Set then
+                AutoStrategyToggle:Set(
+                    value
+                )
+            end
+        end)
+
+        task.defer(function()
+            IgnoreAutoStrategyToggleCallbacks =
+                math.max(
+                    IgnoreAutoStrategyToggleCallbacks - 1,
+                    0
+                )
+        end)
+    end
+
+    local function Stop()
+        Globals.__RyaAutoStrategyEnabled = false
+        Globals.__RyaAutoStrategyStatus = nil
+        Saved.Enabled = false
+        PendingStrategyChange = false
+        RunningStrategyFile = nil
+        Save()
+
+        UpdateMainStatus(
+            "Status: Idle"
+        )
+
+        Globals.__RyaAutoStrategyStatus = nil
+
+        if AutoStrategyThread then
+            pcall(function()
+                task.cancel(
+                    AutoStrategyThread
+                )
+            end)
+
+            AutoStrategyThread = nil
+        end
+
+        SetStatus(
+            "Stopped"
+        )
+
+        return true
+    end
+
+    Globals.__RyaSetAutoStrategyToggleVisual =
+        SetToggleVisual
+
+    Globals.__RyaAutoStrategySetDesiredEnabled =
+        function(value)
+            Saved.Enabled = value == true
+            Save()
+
+            task.defer(function()
+                SetToggleVisual(
+                    Saved.Enabled
+                )
+            end)
+
+            return true
+        end
+
+    Globals.__RyaAutoStrategyStopForSwitch =
+        Stop
+
+    local function Start()
+        if type(CanEnable) == "function" then
+            local ok, allowed, message =
+                pcall(
+                    CanEnable
+                )
+
+            if not ok
+                or allowed == false then
+
+                if ok
+                    and tostring(message or "")
+                        == "__RYA_PENDING_SWITCH__" then
+
+                    Saved.Enabled = true
+                    Save()
+
+                    task.defer(function()
+                        SetToggleVisual(true)
+                    end)
+
+                    UpdateMainStatus(
+                        tostring(
+                            Globals.__RyaAutoFarmTransitionStatus
+                            or "Status: Changed to Auto Strategy - Waiting for Current Game to Finish..."
+                        )
+                    )
+
+                    return true
+                end
+
+                Notify(
+                    tostring(
+                        message
+                        or "Unable to start Auto Strategy."
+                    ),
+                    5
+                )
+
+                return false
+            end
+        end
+
+        local path =
+            SelectedStrategyFile
+
+        if not path
+            or path == "" then
+
+            SetStatus(
+                "Select a file first"
+            )
+
+            Notify(
+                "Select a strategy file first."
+            )
+
+            return false
+        end
+
+        if type(readfile) ~= "function" then
+            SetStatus(
+                "readfile unsupported"
+            )
+
+            Notify(
+                "readfile is not supported by this executor.",
+                5
+            )
+
+            return false
+        end
+
+        local readOk, source =
+            pcall(
+                readfile,
+                path
+            )
+
+        if not readOk then
+            SetStatus(
+                "Read failed"
+            )
+
+            Notify(
+                "Failed to read file: "
+                .. tostring(source),
+                6
+            )
+
+            return false
+        end
+
+        source =
+            TransformStrategySource(
+                source
+            )
+
+        local chunk, compileError =
+            loadstring(
+                source,
+                "=" .. path
+            )
+
+        if not chunk then
+            SetStatus(
+                "Compile error"
+            )
+
+            Notify(
+                "Compile error: "
+                .. tostring(compileError),
+                8
+            )
+
+            return false
+        end
+
+        if AutoStrategyThread then
+            pcall(function()
+                task.cancel(
+                    AutoStrategyThread
+                )
+            end)
+
+            AutoStrategyThread = nil
+        end
+
+        Globals.__RyaAutoStrategyEnabled = true
+        Saved.Enabled = true
+        Saved.SelectedFile = path
+        RunningStrategyFile = path
+        PendingStrategyChange = false
+        Save()
+
+        StartProgressWebhook()
+
+        UpdateMainStatus(
+            "Status: Running Auto Strategy"
+        )
+
+        local fileName =
+            GetFileName(
+                path
+            )
+
+        SetStatus(
+            "Running "
+            .. fileName
+        )
+
+        AutoStrategyThread =
+            task.spawn(function()
+                local runOk, runError =
+                    pcall(
+                        chunk
+                    )
+
+                AutoStrategyThread = nil
+
+                if Globals.__RyaAutoStrategyEnabled ~= true then
+                    return
+                end
+
+                if not runOk then
+                    Globals.__RyaAutoStrategyEnabled = false
+                    Saved.Enabled = false
+                    Save()
+
+                    SetStatus(
+                        "Runtime error"
+                    )
+
+                    Notify(
+                        "Runtime error: "
+                        .. tostring(runError),
+                        8
+                    )
+
+                    task.defer(function()
+                        SetToggleVisual(
+                            false
+                        )
+                    end)
+
+                    return
+                end
+
+                SetStatus(
+                    "Loaded "
+                    .. fileName
+                )
+            end)
+
+        return true
+    end
+
+    task.spawn(function()
+        while true do
+            task.wait(2)
+
+            if not RefreshingFiles then
+                RefreshFiles()
+            end
+        end
+    end)
+
+    local function GetGameStateReplicator()
+        local stateReplicators =
+            ReplicatedStorage:FindFirstChild(
+                "StateReplicators"
+            )
+
+        return
+            stateReplicators
+            and stateReplicators:FindFirstChild(
+                "GameStateReplicator"
+            )
+    end
+
+    local function GetVoteReplicator()
+        local stateReplicators =
+            ReplicatedStorage:FindFirstChild(
+                "StateReplicators"
+            )
+
+        return
+            stateReplicators
+            and stateReplicators:FindFirstChild(
+                "VoteReplicator"
+            )
+    end
+
+    local VIP_MAP_GAMEPASS_ID = 10518590
+    local HasVIP = false
+
+    pcall(function()
+        HasVIP =
+            MarketplaceService:UserOwnsGamePassAsync(
+                LocalPlayer.UserId,
+                VIP_MAP_GAMEPASS_ID
+            ) == true
+    end)
+
+    local function GetAutoSkipButton()
+        local playerGui =
+            LocalPlayer:FindFirstChild(
+                "PlayerGui"
+            )
+
+        local settings =
+            playerGui
+            and playerGui:FindFirstChild(
+                "ReactUniversalSettings"
+            )
+
+        local window =
+            settings
+            and settings:FindFirstChild(
+                "window"
+            )
+
+        local scrollingFrame =
+            window
+            and window:FindFirstChild(
+                "scrollingFrame"
+            )
+
+        local unknown =
+            scrollingFrame
+            and scrollingFrame:FindFirstChild(
+                "Unknown"
+            )
+
+        local autoSkip =
+            unknown
+            and unknown:FindFirstChild(
+                "Auto Skip"
+            )
+
+        local button =
+            autoSkip
+            and autoSkip:FindFirstChild(
+                "button"
+            )
+
+        local toggle =
+            button
+            and button:FindFirstChild(
+                "toggle"
+            )
+
+        return toggle
+            and toggle:FindFirstChild(
+                "imageButton"
+            )
+    end
+
+    local function IsAutoSkipEnabled()
+        local button =
+            GetAutoSkipButton()
+
+        if not button then
+            return nil
+        end
+
+        local contentText =
+            button:FindFirstChild(
+                "contentText"
+            )
+
+        if not contentText then
+            return nil
+        end
+
+        local state =
+            tostring(
+                contentText.Text
+            ):lower()
+
+        if state == "enabled" then
+            return true
+        end
+
+        if state == "disabled" then
+            return false
+        end
+
+        return nil
+    end
+
+    local AutoSkipPendingState = nil
+    local AutoSkipLastClickAt = 0
+
+    local function ToggleAutoSkip()
+        local button =
+            GetAutoSkipButton()
+
+        if not button
+            or type(getconnections) ~= "function" then
+
+            return false
+        end
+
+        local downConnections =
+            getconnections(
+                button.MouseButton1Down
+            )
+
+        local upConnections =
+            getconnections(
+                button.MouseButton1Up
+            )
+
+        if #downConnections == 0
+            or #upConnections == 0 then
+
+            return false
+        end
+
+        for _, connection in ipairs(
+            downConnections
+        ) do
+            pcall(function()
+                connection.Function()
+            end)
+        end
+
+        task.wait(0.05)
+
+        for _, connection in ipairs(
+            upConnections
+        ) do
+            pcall(function()
+                connection.Function()
+            end)
+        end
+
+        return true
+    end
+
+    local function SetAutoSkip(enabled)
+        enabled = enabled == true
+
+        local current =
+            IsAutoSkipEnabled()
+
+        if current == nil then
+            return false
+        end
+
+        if current == enabled then
+            AutoSkipPendingState = nil
+            return true
+        end
+
+        if AutoSkipPendingState == enabled
+            and os.clock() - AutoSkipLastClickAt < 0.5 then
+
+            return false
+        end
+
+        AutoSkipPendingState = enabled
+        AutoSkipLastClickAt = os.clock()
+
+        if not ToggleAutoSkip() then
+            AutoSkipPendingState = nil
+            return false
+        end
+
+        task.wait(0.15)
+
+        current =
+            IsAutoSkipEnabled()
+
+        if current == enabled then
+            AutoSkipPendingState = nil
+            return true
+        end
+
+        return false
+    end
+
+    local function IsVoteSkipButtonVisible()
+        local playerGui =
+            LocalPlayer:FindFirstChild(
+                "PlayerGui"
+            )
+
+        local voteGui =
+            playerGui
+            and playerGui:FindFirstChild(
+                "ReactOverridesVote"
+            )
+
+        local frameObject =
+            voteGui
+            and voteGui:FindFirstChild(
+                "Frame"
+            )
+
+        local votes =
+            frameObject
+            and frameObject:FindFirstChild(
+                "votes"
+            )
+
+        local voteButton =
+            votes
+            and votes:FindFirstChild(
+                "vote"
+            )
+
+        return voteButton
+            and voteButton.Position
+                == UDim2.new(
+                    0.5,
+                    0,
+                    0.5,
+                    0
+                )
+    end
+
+    task.spawn(function()
+        local vipApplied = false
+
+        while true do
+            task.wait(0.1)
+
+            local autoStrategyEnabled =
+                Globals.__RyaAutoStrategyEnabled == true
+
+            if not autoStrategyEnabled then
+                if vipApplied then
+                    SetAutoSkip(false)
+                end
+
+                vipApplied = false
+                continue
+            end
+
+            local enabled =
+                Saved.AutoSkipStrategy == true
+
+            if HasVIP then
+                if enabled then
+                    if not vipApplied
+                        or IsAutoSkipEnabled() ~= true then
+
+                        if SetAutoSkip(true) then
+                            vipApplied = true
+                        end
+                    end
+                else
+                    if vipApplied then
+                        SetAutoSkip(false)
+                    end
+
+                    vipApplied = false
+                end
+
+                continue
+            end
+
+            if not enabled then
+                continue
+            end
+
+            local rep =
+                GetGameStateReplicator()
+
+            if rep
+                and rep:GetAttribute(
+                    "GameOver"
+                ) ~= true
+                and IsVoteSkipButtonVisible() then
+
+                pcall(function()
+                    ReplicatedStorage
+                        :WaitForChild(
+                            "RemoteFunction"
+                        )
+                        :InvokeServer(
+                            "Voting",
+                            "Skip"
+                        )
+                end)
+
+                task.wait(0.2)
+            end
+        end
+    end)
+
+    local function ReturnToLobbyForStrategyChange()
+        if ReturnToLobbyInProgress
+            or PendingStrategyChange ~= true
+            or Globals.__RyaAutoStrategyEnabled ~= true then
+
+            return false
+        end
+
+        ReturnToLobbyInProgress = true
+
+        UpdateMainStatus(
+            "Status: Returning to Lobby..."
+        )
+
+        if AutoStrategyThread then
+            pcall(function()
+                task.cancel(
+                    AutoStrategyThread
+                )
+            end)
+
+            AutoStrategyThread = nil
+        end
+
+        -- The main BackToLobby() uses FindFirstChild(), so if this runs
+        -- before the end-screen Teleport remote exists it can silently miss it.
+        -- Tower XP naturally waits longer because it refreshes the tower level
+        -- before returning. Wait for the exact same BackToLobby remote here.
+        local deadline =
+            os.clock() + 10
+
+        local backToLobbyRemote = nil
+
+        repeat
+            local network =
+                ReplicatedStorage:FindFirstChild(
+                    "Network"
+                )
+
+            local teleportFolder =
+                network
+                and network:FindFirstChild(
+                    "Teleport"
+                )
+
+            backToLobbyRemote =
+                teleportFolder
+                and teleportFolder:FindFirstChild(
+                    "RE:backToLobby"
+                )
+
+            if backToLobbyRemote then
+                break
+            end
+
+            task.wait(0.1)
+        until os.clock() >= deadline
+
+        if not backToLobbyRemote then
+            ReturnToLobbyInProgress = false
+            return false
+        end
+
+        task.spawn(function()
+            local fireDeadline =
+                os.clock() + 8
+
+            repeat
+                pcall(function()
+                    backToLobbyRemote:FireServer()
+                end)
+
+                task.wait(0.75)
+
+                if IsLobby() then
+                    return
+                end
+            until os.clock() >= fireDeadline
+
+            ReturnToLobbyInProgress = false
+        end)
+
+        return true
+    end
+
+    local function RematchAndRerun()
+        if RestartInProgress
+            or Saved.AutoRestartStrategy ~= true
+            or Globals.__RyaAutoStrategyEnabled ~= true then
+
+            return false
+        end
+
+        RestartInProgress = true
+
+        local gameOverRep =
+            GetGameStateReplicator()
+
+        local health =
+            gameOverRep
+            and tonumber(
+                gameOverRep:GetAttribute(
+                    "Health"
+                )
+            )
+            or 0
+
+        local won =
+            health > 0
+
+        UpdateMainStatus(
+            won
+            and "Status: Rematching..."
+            or "Status: Restarting Match..."
+        )
+
+        local ok, result =
+            pcall(function()
+                if won then
+                    -- Win/Triumph: use RE:Rematch once.
+                    local rematchEvent =
+                        ReplicatedStorage
+                            :WaitForChild("Network")
+                            :WaitForChild("GameManager")
+                            :WaitForChild("RE:Rematch")
+
+                    rematchEvent:FireServer()
+
+                    local timeoutAt =
+                        os.clock() + 30
+
+                    repeat
+                        if Saved.AutoRestartStrategy ~= true
+                            or Globals.__RyaAutoStrategyEnabled ~= true then
+
+                            return false
+                        end
+
+                        local rep =
+                            GetGameStateReplicator()
+
+                        if rep
+                            and rep:GetAttribute(
+                                "GameOver"
+                            ) == false then
+
+                            return true
+                        end
+
+                        task.wait(0.1)
+                    until os.clock() >= timeoutAt
+
+                    return false
+                end
+
+                -- Loss: match the main Auto Progress logic.
+                -- Use Voting/Skip only until GameOver becomes false.
+                local remoteFunction =
+                    ReplicatedStorage:WaitForChild(
+                        "RemoteFunction"
+                    )
+
+                local timeoutAt =
+                    os.clock() + 15
+
+                repeat
+                    if Saved.AutoRestartStrategy ~= true
+                        or Globals.__RyaAutoStrategyEnabled ~= true then
+
+                        return false
+                    end
+
+                    pcall(function()
+                        remoteFunction:InvokeServer(
+                            "Voting",
+                            "Skip"
+                        )
+                    end)
+
+                    local waitUntil =
+                        os.clock() + 0.75
+
+                    repeat
+                        task.wait(0.1)
+
+                        local rep =
+                            GetGameStateReplicator()
+
+                        if rep
+                            and rep:GetAttribute(
+                                "GameOver"
+                            ) == false then
+
+                            return true
+                        end
+                    until os.clock() >= waitUntil
+                until os.clock() >= timeoutAt
+
+                local rep =
+                    GetGameStateReplicator()
+
+                return rep
+                    and rep:GetAttribute(
+                        "GameOver"
+                    ) == false
+                    or false
+            end)
+
+        if not ok
+            or result ~= true then
+
+            RestartInProgress = false
+
+            if Globals.__RyaAutoStrategyEnabled == true
+                and Saved.AutoRestartStrategy == true then
+
+                Notify(
+                    "Auto Restart Strategy failed.",
+                    5
+                )
+            end
+
+            return false
+        end
+
+        local readyDeadline =
+            os.clock() + 45
+
+        UpdateMainStatus(
+            "Status: Waiting for Ready..."
+        )
+
+        local readyReached =
+            false
+
+        repeat
+            if Saved.AutoRestartStrategy ~= true
+                or Globals.__RyaAutoStrategyEnabled ~= true then
+
+                RestartInProgress = false
+                return false
+            end
+
+            local rep =
+                GetGameStateReplicator()
+
+            local voteRep =
+                GetVoteReplicator()
+
+            if rep
+                and rep:GetAttribute(
+                    "GameStarted"
+                ) == true then
+
+                readyReached = true
+                break
+            end
+
+            if voteRep
+                and voteRep:GetAttribute(
+                    "Enabled"
+                ) == true
+                and voteRep:GetAttribute(
+                    "Title"
+                ) == "Ready?" then
+
+                readyReached = true
+                break
+            end
+
+            task.wait(0.1)
+        until os.clock() >= readyDeadline
+
+        if not readyReached then
+            RestartInProgress = false
+            return false
+        end
+
+        -- Do NOT press Ready here. Start the strategy only once the
+        -- Ready? prompt exists so the strategy's own TDS:Ready()
+        -- handles the prompt at the correct point in the file.
+        if Saved.AutoRestartStrategy == true
+            and Globals.__RyaAutoStrategyEnabled == true then
+
+            Start()
+        end
+
+        RestartInProgress = false
+        return true
+    end
+
+    task.spawn(function()
+        local lastRep = nil
+        local lastGameOver = nil
+
+        local function HandleGameOver()
+            if Globals.__RyaAutoStrategyEnabled ~= true then
+                return
+            end
+
+            if Globals.__RyaAutoFarmTransitionTarget ~= nil then
+                return
+            end
+
+            if PendingStrategyChange == true then
+                if not ReturnToLobbyInProgress then
+                    task.spawn(
+                        ReturnToLobbyForStrategyChange
+                    )
+                end
+
+                return
+            end
+
+            if Saved.AutoRestartStrategy == true
+                and not RestartInProgress then
+
+                task.spawn(
+                    RematchAndRerun
+                )
+            end
+        end
+
+        while true do
+            task.wait(0.1)
+
+            local rep =
+                GetGameStateReplicator()
+
+            if rep ~= lastRep then
+                lastRep = rep
+
+                lastGameOver =
+                    rep
+                    and rep:GetAttribute(
+                        "GameOver"
+                    ) == true
+                    or nil
+
+                if lastGameOver == true then
+                    HandleGameOver()
+                end
+
+            elseif rep then
+                local isGameOver =
+                    rep:GetAttribute(
+                        "GameOver"
+                    ) == true
+
+                if isGameOver == true
+                    and lastGameOver ~= true then
+
+                    HandleGameOver()
+                end
+
+                lastGameOver =
+                    isGameOver
+            else
+                lastGameOver = nil
+            end
+        end
+    end)
+
+    AutoStrategyToggle =
+        AutoStrategy:Toggle({
+            Title = "Enable Auto Strategy",
+            Desc = "Automatically runs the selected strategy file.",
+            Value = Saved.Enabled == true,
+            Callback = function(value)
+                if IgnoreAutoStrategyToggleCallbacks > 0
+                    or Globals.__RyaFarmToggleVisualSync == true then
+
+                    return
+                end
+
+                if value then
+                    if not Start() then
+                        Globals.__RyaAutoStrategyEnabled = false
+                        Saved.Enabled = false
+                        Save()
+
+                        task.defer(function()
+                            SetToggleVisual(
+                                false
+                            )
+                        end)
+                    end
+                else
+                    if type(RequestDisable) == "function" then
+                        local ok, handled =
+                            pcall(
+                                RequestDisable
+                            )
+
+                        if ok
+                            and handled == true then
+
+                            task.defer(function()
+                                SetToggleVisual(
+                                    true
+                                )
+                            end)
+
+                            return
+                        end
+                    end
+
+                    Stop()
+                end
+            end
+        })
+
+    AutoRestartStrategyToggle =
+        AutoStrategy:Toggle({
+            Title = "Auto Restart Strategy",
+            Desc = "Rematches and reruns the selected strategy after Triumph or Loss.",
+            Value = Saved.AutoRestartStrategy == true,
+            Callback = function(value)
+                Saved.AutoRestartStrategy =
+                    value == true
+
+                Save()
+            end
+        })
+
+    AutoSkipStrategyToggle =
+        AutoStrategy:Toggle({
+            Title = "Auto Skip",
+            Desc = "Automatically skip waves",
+            Value = Saved.AutoSkipStrategy == true,
+            Callback = function(value)
+                Saved.AutoSkipStrategy =
+                    value == true
+
+                Globals.__RyaAutoStrategyForceAutoSkip =
+                    Saved.AutoSkipStrategy == true
+
+                Save()
+            end
+        })
+
+
+    if SelectedStrategyFile then
+        SetStatus(
+            "Selected "
+            .. GetFileName(
+                SelectedStrategyFile
+            )
+        )
+    elseif type(listfiles) ~= "function" then
+        SetStatus(
+            "listfiles unsupported"
+        )
+    else
+        SetStatus(
+            "No supported files found"
+        )
+    end
+
+    if Saved.Enabled == true
+        and SelectedStrategyFile then
+
+        task.defer(function()
+            task.wait(0.1)
+
+            if Globals.__RyaAutoStrategyEnabled ~= true then
+                Start()
+            end
+        end)
+    end
+
+    return {
+        Start = Start,
+        Stop = Stop,
+        Refresh = RefreshFiles,
+        IsEnabled = function()
+            return Saved.Enabled == true
+        end,
+        GetSelectedFile = function()
+            return SelectedStrategyFile
+        end
+    }
+end
