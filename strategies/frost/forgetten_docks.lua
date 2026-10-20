@@ -1,5 +1,5 @@
 local loadAutoGatling =
-    getgenv().__RyaLoadAutoGatling
+    getgenv().LoadAutoGatling
 
 if type(loadAutoGatling) == "function" then
     task.spawn(
