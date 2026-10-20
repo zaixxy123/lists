@@ -3,7 +3,7 @@
 -- then returns to the lobby so the current Trial can be checked again.
 
 local ROOT =
-    "https://raw.githubusercontent.com/RyaaV2/lists/refs/heads/main/strategies/"
+    "https://raw.githubusercontent.com/zaixxy123/lists/refs/heads/main/strategies/"
 
 local ok, sharedConfig = pcall(function()
     return loadstring(
