@@ -27,9 +27,9 @@ local WebhookURL =
     )
 
 local WatcherRunning = false
-Globals.__RyaWebhookWatcherVersion =
+Globals.WebhookWatcherVersion =
     tonumber(
-        Globals.__RyaWebhookWatcherVersion
+        Globals.WebhookWatcherVersion
     ) or 0
 local Sending = false
 local LastDetectedLevel = nil
@@ -57,8 +57,8 @@ pcall(function()
 end)
 
 local Session =
-    type(Globals.__RyaWebhookSession) == "table"
-    and Globals.__RyaWebhookSession
+    type(Globals.WebhookSession) == "table"
+    and Globals.WebhookSession
     or {
         Mode = "idle",
         StartingLevel = nil,
@@ -69,7 +69,7 @@ local Session =
         Losses = 0
     }
 
-Globals.__RyaWebhookSession = Session
+Globals.WebhookSession = Session
 
 local function Trim(text)
     return tostring(text or "")
@@ -615,11 +615,11 @@ local function GetNormalTowerCounts(owned)
 end
 
 local function GetGoldenOwnedLookup()
-    if Globals.__RyaGetGoldenTowersOwned then
+    if Globals.GetGoldenTowersOwned then
         local ok, result =
             pcall(function()
                 return
-                    Globals.__RyaGetGoldenTowersOwned()
+                    Globals.GetGoldenTowersOwned()
             end)
 
         if ok
@@ -853,7 +853,7 @@ local function GetFarmStatus(mode)
     if mode == "auto_strategy" then
         local status =
             StripStatusPrefix(
-                Globals.__RyaAutoStrategyStatus
+                Globals.AutoStrategyStatus
                 or ""
             )
 
@@ -861,7 +861,7 @@ local function GetFarmStatus(mode)
             return status
         end
 
-        return Globals.__RyaAutoStrategyEnabled == true
+        return Globals.AutoStrategyEnabled == true
             and "Running"
             or "Idle"
     end
@@ -958,7 +958,7 @@ local function DetectMode()
         return "auto_event"
     end
 
-    if Globals.__RyaAutoStrategyEnabled == true then
+    if Globals.AutoStrategyEnabled == true then
         return "auto_strategy"
     end
 
@@ -986,7 +986,7 @@ local function DetectMode()
         return "gatling"
     end
 
-    if Globals.__RyaStoryModeCompleted == true
+    if Globals.StoryModeCompleted == true
         and LastActiveMode == "story" then
 
         return "story"
@@ -997,7 +997,7 @@ end
 
 local function GetModeRunningLabel(mode)
     if mode == "story"
-        and Globals.__RyaStoryModeCompleted == true then
+        and Globals.StoryModeCompleted == true then
 
         return "COMPLETED"
     end
@@ -1006,7 +1006,7 @@ local function GetModeRunningLabel(mode)
         (mode == "auto_event"
             and Globals.AutoEventEnabled == true)
         or (mode == "auto_strategy"
-            and Globals.__RyaAutoStrategyEnabled == true)
+            and Globals.AutoStrategyEnabled == true)
         or (mode == "currency_farm"
             and Globals.CurrencyFarmEnabled == true)
         or (mode == "auto_max"
@@ -1050,7 +1050,7 @@ local function EnsureSession(mode, snapshot)
             tonumber(snapshot.Gems) or 0
     end
 
-    Globals.__RyaWebhookSession =
+    Globals.WebhookSession =
         Session
 end
 
@@ -1848,13 +1848,13 @@ local function GetTowerXPLevel()
         or nil
 
     if level ~= nil then
-        Globals.__RyaWebhookTowerXPLevel =
+        Globals.WebhookTowerXPLevel =
             level
     end
 
     return level
         or tonumber(
-            Globals.__RyaWebhookTowerXPLevel
+            Globals.WebhookTowerXPLevel
         )
         or 0
 end
@@ -2681,7 +2681,7 @@ local function BuildStoryEmbed(
 
     local currentState
 
-    if Globals.__RyaStoryModeCompleted == true then
+    if Globals.StoryModeCompleted == true then
         currentState =
             "✅ Story Mode Completed"
     elseif eventType == "match_complete" then
@@ -2764,7 +2764,7 @@ local function BuildAutoStrategyEmbed(
 
     local strategyMode =
         tostring(
-            Globals.__RyaAutoStrategyMode
+            Globals.AutoStrategyMode
             or "Unknown"
         )
 
@@ -3163,7 +3163,7 @@ local function HandleMatchComplete(
 
     if watcherVersion ~= nil
         and watcherVersion ~= tonumber(
-            Globals.__RyaWebhookWatcherVersion
+            Globals.WebhookWatcherVersion
         ) then
 
         return false
@@ -3194,7 +3194,7 @@ local function HandleMatchComplete(
             + 1
     end
 
-    Globals.__RyaWebhookSession =
+    Globals.WebhookSession =
         Session
 
     local rewards =
@@ -3202,7 +3202,7 @@ local function HandleMatchComplete(
 
     if watcherVersion ~= nil
         and watcherVersion ~= tonumber(
-            Globals.__RyaWebhookWatcherVersion
+            Globals.WebhookWatcherVersion
         ) then
 
         return false
@@ -3219,9 +3219,9 @@ local function HandleMatchComplete(
         }
     )
 
-    Globals.__RyaWebhookMatchCompleteSerial =
+    Globals.WebhookMatchCompleteSerial =
         (tonumber(
-            Globals.__RyaWebhookMatchCompleteSerial
+            Globals.WebhookMatchCompleteSerial
         ) or 0)
         + 1
 end
@@ -3283,14 +3283,14 @@ function ProgressWebhook.Start()
 
     WatcherRunning = true
 
-    Globals.__RyaWebhookWatcherVersion =
+    Globals.WebhookWatcherVersion =
         (tonumber(
-            Globals.__RyaWebhookWatcherVersion
+            Globals.WebhookWatcherVersion
         ) or 0)
         + 1
 
     local myWatcherVersion =
-        Globals.__RyaWebhookWatcherVersion
+        Globals.WebhookWatcherVersion
 
     task.spawn(function()
         if not game:IsLoaded() then
@@ -3317,7 +3317,7 @@ function ProgressWebhook.Start()
 
         while WatcherRunning
             and myWatcherVersion == tonumber(
-                Globals.__RyaWebhookWatcherVersion
+                Globals.WebhookWatcherVersion
             ) do
             local mode =
                 DetectMode()
@@ -3408,9 +3408,9 @@ end
 function ProgressWebhook.Stop()
     WatcherRunning = false
 
-    Globals.__RyaWebhookWatcherVersion =
+    Globals.WebhookWatcherVersion =
         (tonumber(
-            Globals.__RyaWebhookWatcherVersion
+            Globals.WebhookWatcherVersion
         ) or 0)
         + 1
 

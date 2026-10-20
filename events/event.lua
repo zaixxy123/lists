@@ -73,7 +73,7 @@ local function EndMatchWatch(session)
 
                 local globals = getgenv()
                 local pending = tostring(
-                    globals.__RyaAutoFarmTransitionTarget
+                    globals.AutoFarmTransitionTarget
                     or globals.PendingAutoFarmTarget
                     or ""
                 )

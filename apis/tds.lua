@@ -41,11 +41,11 @@ return function(Context)
     local VIP_GAMEPASS_ID = 10518590
 
     local RuntimeGlobals = getgenv()
-    RuntimeGlobals.__RyaVIPVoteSkipVersion =
-        (tonumber(RuntimeGlobals.__RyaVIPVoteSkipVersion) or 0) + 1
+    RuntimeGlobals.VIPVoteSkipVersion =
+        (tonumber(RuntimeGlobals.VIPVoteSkipVersion) or 0) + 1
 
     local VIPVoteSkipVersion =
-        RuntimeGlobals.__RyaVIPVoteSkipVersion
+        RuntimeGlobals.VIPVoteSkipVersion
 
     local HasVIP = Context.HasVIP
 
@@ -736,7 +736,7 @@ return function(Context)
 
         task.spawn(function()
             while IsStrategyRuntimeEnabled()
-                and RuntimeGlobals.__RyaVIPVoteSkipVersion
+                and RuntimeGlobals.VIPVoteSkipVersion
                     == VIPVoteSkipVersion do
 
                 UpdateVIPAutoSkip()

@@ -201,7 +201,7 @@ return function(Context)
 
     LoadSaved()
 
-    Globals.__RyaAutoStrategyForceAutoSkip =
+    Globals.AutoStrategyForceAutoSkip =
         Saved.AutoSkipStrategy == true
 
     local SelectedStrategyFile = nil
@@ -237,7 +237,7 @@ return function(Context)
                 ""
             )
 
-        Globals.__RyaAutoStrategyStatus =
+        Globals.AutoStrategyStatus =
             cleanText
 
         if AutoStrategy
@@ -585,7 +585,7 @@ return function(Context)
 
                         Save()
 
-                        if Globals.__RyaAutoStrategyEnabled == true
+                        if Globals.AutoStrategyEnabled == true
                             and RunningStrategyFile then
 
                             if IsLobby() then
@@ -715,7 +715,7 @@ return function(Context)
             end
 
             local running =
-                Globals.__RyaAutoStrategyEnabled == true
+                Globals.AutoStrategyEnabled == true
 
             local keepCurrent =
                 SelectedStrategyFile
@@ -796,8 +796,8 @@ return function(Context)
     end
 
     local function Stop()
-        Globals.__RyaAutoStrategyEnabled = false
-        Globals.__RyaAutoStrategyStatus = nil
+        Globals.AutoStrategyEnabled = false
+        Globals.AutoStrategyStatus = nil
         Saved.Enabled = false
         PendingStrategyChange = false
         RunningStrategyFile = nil
@@ -807,7 +807,7 @@ return function(Context)
             "Status: Idle"
         )
 
-        Globals.__RyaAutoStrategyStatus = nil
+        Globals.AutoStrategyStatus = nil
 
         if AutoStrategyThread then
             pcall(function()
@@ -869,7 +869,7 @@ return function(Context)
 
                     UpdateMainStatus(
                         tostring(
-                            Globals.__RyaAutoFarmTransitionStatus
+                            Globals.AutoFarmTransitionStatus
                             or "Status: Changed to Auto Strategy - Waiting for Current Game to Finish..."
                         )
                     )
@@ -974,7 +974,7 @@ return function(Context)
             AutoStrategyThread = nil
         end
 
-        Globals.__RyaAutoStrategyEnabled = true
+        Globals.AutoStrategyEnabled = true
         Saved.Enabled = true
         Saved.SelectedFile = path
         RunningStrategyFile = path
@@ -1006,12 +1006,12 @@ return function(Context)
 
                 AutoStrategyThread = nil
 
-                if Globals.__RyaAutoStrategyEnabled ~= true then
+                if Globals.AutoStrategyEnabled ~= true then
                     return
                 end
 
                 if not runOk then
-                    Globals.__RyaAutoStrategyEnabled = false
+                    Globals.AutoStrategyEnabled = false
                     Saved.Enabled = false
                     Save()
 
@@ -1316,7 +1316,7 @@ return function(Context)
             task.wait(0.1)
 
             local autoStrategyEnabled =
-                Globals.__RyaAutoStrategyEnabled == true
+                Globals.AutoStrategyEnabled == true
 
             if not autoStrategyEnabled then
                 if vipApplied then
@@ -1382,7 +1382,7 @@ return function(Context)
     local function ReturnToLobbyForStrategyChange()
         if ReturnToLobbyInProgress
             or PendingStrategyChange ~= true
-            or Globals.__RyaAutoStrategyEnabled ~= true then
+            or Globals.AutoStrategyEnabled ~= true then
 
             return false
         end
@@ -1467,7 +1467,7 @@ return function(Context)
     local function RematchAndRerun()
         if RestartInProgress
             or Saved.AutoRestartStrategy ~= true
-            or Globals.__RyaAutoStrategyEnabled ~= true then
+            or Globals.AutoStrategyEnabled ~= true then
 
             return false
         end
@@ -1512,7 +1512,7 @@ return function(Context)
 
                     repeat
                         if Saved.AutoRestartStrategy ~= true
-                            or Globals.__RyaAutoStrategyEnabled ~= true then
+                            or Globals.AutoStrategyEnabled ~= true then
 
                             return false
                         end
@@ -1546,7 +1546,7 @@ return function(Context)
 
                 repeat
                     if Saved.AutoRestartStrategy ~= true
-                        or Globals.__RyaAutoStrategyEnabled ~= true then
+                        or Globals.AutoStrategyEnabled ~= true then
 
                         return false
                     end
@@ -1592,7 +1592,7 @@ return function(Context)
 
             RestartInProgress = false
 
-            if Globals.__RyaAutoStrategyEnabled == true
+            if Globals.AutoStrategyEnabled == true
                 and Saved.AutoRestartStrategy == true then
 
                 Notify(
@@ -1616,7 +1616,7 @@ return function(Context)
 
         repeat
             if Saved.AutoRestartStrategy ~= true
-                or Globals.__RyaAutoStrategyEnabled ~= true then
+                or Globals.AutoStrategyEnabled ~= true then
 
                 RestartInProgress = false
                 return false
@@ -1661,7 +1661,7 @@ return function(Context)
         -- Ready? prompt exists so the strategy's own TDS:Ready()
         -- handles the prompt at the correct point in the file.
         if Saved.AutoRestartStrategy == true
-            and Globals.__RyaAutoStrategyEnabled == true then
+            and Globals.AutoStrategyEnabled == true then
 
             Start()
         end
@@ -1675,11 +1675,11 @@ return function(Context)
         local lastGameOver = nil
 
         local function HandleGameOver()
-            if Globals.__RyaAutoStrategyEnabled ~= true then
+            if Globals.AutoStrategyEnabled ~= true then
                 return
             end
 
-            if Globals.__RyaAutoFarmTransitionTarget ~= nil then
+            if Globals.AutoFarmTransitionTarget ~= nil then
                 return
             end
 
@@ -1749,14 +1749,14 @@ return function(Context)
             Value = Saved.Enabled == true,
             Callback = function(value)
                 if IgnoreAutoStrategyToggleCallbacks > 0
-                    or Globals.__RyaFarmToggleVisualSync == true then
+                    or Globals.FarmToggleVisualSync == true then
 
                     return
                 end
 
                 if value then
                     if not Start() then
-                        Globals.__RyaAutoStrategyEnabled = false
+                        Globals.AutoStrategyEnabled = false
                         Saved.Enabled = false
                         Save()
 
@@ -1813,7 +1813,7 @@ return function(Context)
                 Saved.AutoSkipStrategy =
                     value == true
 
-                Globals.__RyaAutoStrategyForceAutoSkip =
+                Globals.AutoStrategyForceAutoSkip =
                     Saved.AutoSkipStrategy == true
 
                 Save()
@@ -1844,7 +1844,7 @@ return function(Context)
         task.defer(function()
             task.wait(0.1)
 
-            if Globals.__RyaAutoStrategyEnabled ~= true then
+            if Globals.AutoStrategyEnabled ~= true then
                 Start()
             end
         end)

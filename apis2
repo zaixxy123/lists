@@ -631,16 +631,16 @@ local VIPVoteSkipWorkerRunning = false
 
 local RuntimeGlobals = getgenv()
 
-RuntimeGlobals.__RyaVIPVoteSkipVersion =
+RuntimeGlobals.VIPVoteSkipVersion =
     (tonumber(
-        RuntimeGlobals.__RyaVIPVoteSkipVersion
+        RuntimeGlobals.VIPVoteSkipVersion
     ) or 0) + 1
 
 local VIPVoteSkipVersion =
-    RuntimeGlobals.__RyaVIPVoteSkipVersion
+    RuntimeGlobals.VIPVoteSkipVersion
 
 local VIPVoteSkipStartedUnderAutoStrategy =
-    RuntimeGlobals.__RyaAutoStrategyEnabled == true
+    RuntimeGlobals.AutoStrategyEnabled == true
 
 local function GetAutoSkipButton()
     local settings =
@@ -849,8 +849,8 @@ local function TryGetCurrentWave()
 end
 
 local function UpdateVIPAutoSkip()
-    if RuntimeGlobals.__RyaAutoStrategyEnabled == true
-        and RuntimeGlobals.__RyaAutoStrategyForceAutoSkip == true then
+    if RuntimeGlobals.AutoStrategyEnabled == true
+        and RuntimeGlobals.AutoStrategyForceAutoSkip == true then
 
         return
     end
@@ -894,11 +894,11 @@ local function StartVIPVoteSkip()
 
     task.spawn(function()
         while IsStrategyRuntimeEnabled()
-            and RuntimeGlobals.__RyaVIPVoteSkipVersion
+            and RuntimeGlobals.VIPVoteSkipVersion
                 == VIPVoteSkipVersion do
 
             if VIPVoteSkipStartedUnderAutoStrategy
-                and RuntimeGlobals.__RyaAutoStrategyEnabled ~= true then
+                and RuntimeGlobals.AutoStrategyEnabled ~= true then
 
                 break
             end
@@ -1907,7 +1907,7 @@ function TDS:Mode(difficulty)
         (getgenv and getgenv())
         or _G
 
-    globalEnv.__RyaAutoStrategyMode =
+    globalEnv.AutoStrategyMode =
         difficulty
 
     self.SavedMatchmaking =
