@@ -1,4 +1,4 @@
-local TDS = loadstring(game:HttpGet("https://raw.githubusercontent.com/RyaaV2/lists/refs/heads/main/apis2"))()
+local TDS = loadstring(game:HttpGet("https://raw.githubusercontent.com/zaixxy123/lists/refs/heads/main/apis2"))()
 TDS:Loadout("Trapper", "Hacker", "Gatling Gun", "Mercenary Base", "Medic")
 TDS:Mode("Fallen")
 TDS:GameInfo("Lay By", {HiddenEnemies = true, Glass = true, SpeedyEnemies = true, Limitation = true, Committed = true, Fog = true, ExplodingEnemies = true, Quarantine = true})
