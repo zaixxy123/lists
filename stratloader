@@ -858,7 +858,7 @@ return function(Context)
 
                 if ok
                     and tostring(message or "")
-                        == "__RYA_PENDING_SWITCH__" then
+                        == "__PENDING_SWITCH__" then
 
                     Saved.Enabled = true
                     Save()
