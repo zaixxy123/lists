@@ -3,7 +3,7 @@
 -- Late = separate late-game Fallen strategy slot.
 
 local ROOT =
-    "https://raw.githubusercontent.com/RyaaV2/lists/refs/heads/main/strategies/"
+    "https://raw.githubusercontent.com/zaixxy123/lists/refs/heads/main/strategies/"
 
 local function LoadConfig(path)
     local ok, result = pcall(function()
