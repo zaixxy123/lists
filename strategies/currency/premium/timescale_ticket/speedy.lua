@@ -25,10 +25,9 @@ TDS:VoteSkip(8)
 TDS:Sell(5)
 TDS:Sell(1)
 TDS:Sell(4)
-
+TDS:Sell(2)
 TDS:Sell(3)
 TDS:Place("Gatling Gun", -4.321114540100098, 0.9999881982803345, -36.78215408325195)
-TDS:Sell(2)
 
 TDS:Upgrade(6)
 
