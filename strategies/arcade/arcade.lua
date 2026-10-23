@@ -14,7 +14,7 @@ local Modes = {
         Strategy = "pizza_party.lua",
         -- The special lobby loadout is intentionally different from the match strategy.
         LobbyLoadout = {"Scout", "Commander", "Shotgunner", "Minigunner"},
-        Requirements = {"Trapper", "Tesla", "Gatling Gun", "Turret", "Mercenary Base"},
+        Requirements = {"Scout", "Commander", "Shotgunner", "Minigunner", "Trapper", "Tesla", "Gatling Gun", "Turret", "Mercenary Base"},
     },
     ["Badlands"] = {
         MatchmakingMode = "badlands",
