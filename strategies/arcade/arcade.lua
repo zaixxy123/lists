@@ -186,35 +186,16 @@ local function WatchMatch(session)
                     or globals.PendingAutoFarmTarget
                     or ""
                 )
-                if pending ~= "" and pending ~= "Arcade" then
-                    if type(globals.ApplyAutoFarmTransition) == "function" then
-                        globals.ApplyAutoFarmTransition()
-                    end
-                    Running = false
-                    ReturnToLobby()
-                    return
+
+                -- Apply switches only after the match is over, whether won or lost.
+                if pending ~= "" and type(globals.ApplyAutoFarmTransition) == "function" then
+                    globals.ApplyAutoFarmTransition()
                 end
 
-                if globals.AutoArcadeEnabled == true
-                    and tostring(globals.ArcadeMode or "Pizza Party") == ActiveMode then
-                    if Queue(ActiveMode) then
-                        MatchQueued = true
-                        local originalJob = game.JobId
-                        local deadline = os.clock() + 8
-                        repeat
-                            task.wait(0.5)
-                            if not GameOver()
-                                or game.JobId ~= originalJob
-                                or game.PlaceId == LOBBY_PLACE_ID then
-                                Running = false
-                                return
-                            end
-                        until os.clock() >= deadline
-                        MatchQueued = false
-                    end
-                end
-
+                -- Always return to the lobby after GameOver. Matchmaking
+                -- resumes from lobby on the next script load, not in-match.
                 Running = false
+                MatchQueued = false
                 ReturnToLobby()
                 return
             end
