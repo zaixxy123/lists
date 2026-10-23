@@ -19,7 +19,6 @@ local Modes = {
     ["Badlands"] = {
         MatchmakingMode = "badlands",
         Strategy = "badlands.lua",
-        LobbyLoadout = {"Trapper", "Gatling Gun", "Mercenary Base", "Medic", "Hacker"},
         Requirements = {"Trapper", "Gatling Gun", "Mercenary Base", "Medic", "Hacker"},
     },
 }
@@ -81,6 +80,11 @@ local function PrepareLobby(mode)
     if game.PlaceId ~= LOBBY_PLACE_ID then return false end
     local config = Modes[mode]
     if not config then return false end
+
+    -- Badlands has no requested lobby loadout; queue it without touching equipped towers.
+    if type(config.LobbyLoadout) ~= "table" or #config.LobbyLoadout == 0 then
+        return true
+    end
 
     local playerReplicator = FindPlayerReplicator()
     if not playerReplicator then
