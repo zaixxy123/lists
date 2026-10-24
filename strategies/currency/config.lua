@@ -7,7 +7,6 @@ return {
     Coins = {
         Win = {
             RouteKey = "Currency.Coins.Win",
-            MinimumLevel = 0,
             MatchTimeoutMinutes = 15,
             GameOverAction = "Rematch",
             Matchmaking = {
@@ -50,7 +49,6 @@ return {
 
         Lose = {
             RouteKey = "Currency.Coins.Lose",
-            MinimumLevel = 0,
             MatchTimeoutMinutes = 15,
             CountLoseGameOver = true,
             GameOverAction = "Restart",
@@ -90,7 +88,6 @@ return {
     Gems = {
         Lose = {
             RouteKey = "Currency.Gems.Lose",
-            MinimumLevel = 50,
             MatchTimeoutMinutes = 10,
             CountLoseGameOver = true,
             GameOverAction = "Restart",
