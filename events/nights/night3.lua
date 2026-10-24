@@ -181,7 +181,8 @@ local function RunNight3Hard(TDS)
     TDS:Upgrade(1)
     TDS:SetOption(1, "Trap", "Landmine")
 
-    TDS:VoteSkip(5,24)
+    TDS:VoteSkip(5)
+    TDS:VoteSkip(10,24)
     TDS:WaitForWave(6)
 
     TDS:Sell(1)
