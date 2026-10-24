@@ -1843,6 +1843,21 @@ local function BuildMatchmakingPayload(
         }
     end
 
+    -- Halloween 2026 Acts 1-4; night always matches the selected act.
+    -- Supports both Hard (ActN) and Easy (ActNEasy).
+    local actNumber =
+        difficulty:match("^Act([1-4])$")
+        or difficulty:match("^Act([1-4])Easy$")
+
+    if actNumber then
+        return {
+            difficulty = difficulty,
+            night = tonumber(actNumber),
+            count = 1,
+            mode = "halloween2026"
+        }
+    end
+
     local mappedMode =
         TDS.MatchmakingMap[
             difficulty
