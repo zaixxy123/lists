@@ -2826,25 +2826,6 @@ local function BuildAutoStrategyEmbed(
 
     AddField(
         fields,
-        "⚙️ Strategy Settings",
-        "Auto Restart: **"
-            .. (
-                Globals.AutoRestartStrategy == true
-                and "Enabled"
-                or "Disabled"
-            )
-            .. "**\nAuto Skip: **"
-            .. (
-                Globals.AutoStrategyAutoSkip == true
-                and "Enabled"
-                or "Disabled"
-            )
-            .. "**",
-        true
-    )
-
-    AddField(
-        fields,
         "📊 Account Stats",
         "Level: **"
             .. FormatNumber(snapshot.Level)
