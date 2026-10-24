@@ -169,7 +169,7 @@ local function RunNight3Hard(TDS)
     TDS:Loadout("Trapper", "Pyromancer", "Gatling Gun", "Mercenary Base", "Turret")
 
     TDS:VoteSkip(22)
-    TDS:Place("Trapper", -2.40394973754882812, 103.01572418212890625, 109.27811431884765625)
+    TDS:Place("Trapper", -11.76012516021728516, 103.19371795654296875, 104.04237365722656250)
     TDS:Place("Pyromancer", 1.19423961639404297, 104.12820434570312500, 126.08316040039062500)
     TDS:Ready()
 
