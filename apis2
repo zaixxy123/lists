@@ -849,6 +849,12 @@ local function TryGetCurrentWave()
 end
 
 local function UpdateVIPAutoSkip()
+    -- Tower XP uses the Auto Progress API, which owns the VIP setting.
+    -- Never turn that setting off from this standalone API.
+    if RuntimeGlobals.AutoFarmTowerXP == true then
+        return
+    end
+
     if RuntimeGlobals.AutoStrategyEnabled == true
         and RuntimeGlobals.AutoStrategyForceAutoSkip == true then
 
@@ -1068,7 +1074,7 @@ function TDS:ResetIndex()
     VoteSkipConfigured = false
     SkipMode = nil
 
-    if HasVIP then
+    if HasVIP and RuntimeGlobals.AutoFarmTowerXP ~= true then
         SetAutoSkip(false)
     end
 end
