@@ -690,19 +690,22 @@ end
 local AutoSkipPendingState = nil
 local AutoSkipLastClickAt = 0
 
+-- Fire an input event using connected UI callbacks. A pair of
+-- MouseButton1Down + MouseButton1Up is ONE click, not two clicks.
 local function FireToggleSignal(signal)
     if type(getconnections) == "function" then
         local ok, connections = pcall(getconnections, signal)
-        if ok and type(connections) == "table" and #connections > 0 then
+        if ok and type(connections) == "table" then
             local fired = false
             for _, connection in ipairs(connections) do
                 local success = pcall(function()
-                    connection:Fire()
+                    if type(connection.Function) == "function" then
+                        connection.Function()
+                    else
+                        connection:Fire()
+                    end
                 end)
-                if not success and type(connection.Function) == "function" then
-                    success = pcall(connection.Function)
-                end
-                fired = success or fired
+                fired = fired or success
             end
             if fired then return true end
         end
@@ -719,25 +722,25 @@ local function ToggleAutoSkip(expectedState)
     local imageButton = GetAutoSkipControls()
     if not imageButton then return false end
 
-    -- Try the event the UI listens to; re-read the actual setting
-    -- before attempting another event so a successful click is
-    -- never immediately reversed.
-    for _, signalName in ipairs({
-        "MouseButton1Click",
-        "Activated",
-        "MouseButton1Down",
-        "MouseButton1Up"
-    }) do
-        local ok, signal = pcall(function()
-            return imageButton[signalName]
-        end)
-        if ok and signal and FireToggleSignal(signal) then
-            task.wait(0.25)
-            if GetAutoSkipState() == expectedState then
-                return true
-            end
-        end
+    -- Try the paired mouse click that the original working VIP
+    -- setting handler used. Never additionally fire Click/Activated
+    -- after a Down/Up attempt: that can reverse the first toggle.
+    local downFired = FireToggleSignal(imageButton.MouseButton1Down)
+    task.wait(0.05)
+    local upFired = FireToggleSignal(imageButton.MouseButton1Up)
+
+    if downFired or upFired then
+        task.wait(0.3)
+        return GetAutoSkipState() == expectedState
     end
+
+    -- Some clients listen only for Click or Activated. Use exactly
+    -- one of these as a fallback, then check the actual setting.
+    local clicked = FireToggleSignal(imageButton.MouseButton1Click)
+    if not clicked then
+        clicked = FireToggleSignal(imageButton.Activated)
+    end
+    if clicked then task.wait(0.3) end
 
     return GetAutoSkipState() == expectedState
 end
