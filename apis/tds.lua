@@ -210,15 +210,8 @@ return function(Context)
         VoteSkipAll = false
         VoteSkipConfigured = false
 
-        if HasVIP
-            and SetAutoSkip then
-
-            SetAutoSkip(false)
-
-            if StartVIPVoteSkip then
-                StartVIPVoteSkip()
-            end
-        end
+        -- Never change the player's VIP Auto Skip setting.
+        -- Reset only this strategy's own requested wave range.
     end
 
     function TDS:Place(towerName, x, y, z, ...)
@@ -814,12 +807,8 @@ return function(Context)
         if startWave == nil and endWave == nil then
             VoteSkipAll = true
 
-            if HasVIP then
-                UpdateVIPAutoSkip()
-                StartVIPVoteSkip()
-            else
-                StartDirectAutoSkip()
-            end
+            -- Use direct votes instead of clicking the VIP settings toggle.
+            StartDirectAutoSkip()
 
             return true
         end
@@ -851,13 +840,8 @@ return function(Context)
             VoteSkipWaves[wave] = true
         end
 
-        if HasVIP then
-            UpdateVIPAutoSkip()
-            StartVIPVoteSkip()
-        end
-
-        -- The direct skip vote works regardless of VIP status and
-        -- does not depend on the settings toggle or getconnections().
+        -- Never toggle Auto Skip in Roblox settings; only vote on
+        -- the configured waves using the active skip prompt.
         StartNormalVoteSkip()
 
         return true
