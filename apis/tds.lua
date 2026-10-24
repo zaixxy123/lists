@@ -700,9 +700,31 @@ return function(Context)
             return true
         end
 
+        -- Current skip prompt: ReactOverridesVote.Frame.votes.button.text
+        -- (the old UI used votes.vote).
+        local playerGui = plr:FindFirstChild("PlayerGui")
+        local voteGui = playerGui and playerGui:FindFirstChild("ReactOverridesVote")
+        local frame = voteGui and voteGui:FindFirstChild("Frame")
+        local votes = frame and frame:FindFirstChild("votes")
+        local button = votes and votes:FindFirstChild("button")
+        local textLabel = button and button:FindFirstChild("text")
+
+        if voteGui and voteGui.Enabled
+            and frame and frame.Visible
+            and votes and votes.Visible
+            and button and button.Visible
+            and textLabel and textLabel:IsA("TextLabel")
+            and tostring(textLabel.Text):lower():find("hold to skip", 1, true) then
+
+            return true
+        end
+
+        -- Keep support for the previous vote GUI.
         local voteButton = GetNormalVoteButton()
 
-        return voteButton ~= nil
+        return voteGui ~= nil
+            and voteGui.Enabled == true
+            and voteButton ~= nil
             and voteButton.Position == UDim2.new(0.5, 0, 0.5, 0)
     end
 
@@ -832,9 +854,11 @@ return function(Context)
         if HasVIP then
             UpdateVIPAutoSkip()
             StartVIPVoteSkip()
-        else
-            StartNormalVoteSkip()
         end
+
+        -- The direct skip vote works regardless of VIP status and
+        -- does not depend on the settings toggle or getconnections().
+        StartNormalVoteSkip()
 
         return true
     end
