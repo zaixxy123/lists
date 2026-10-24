@@ -116,8 +116,6 @@ local function RunNight3Easy(TDS)
     TDS:Place("Turret", -9.85848999023437500, 103.31646728515625000, 112.79949951171875000)
     TDS:UpgradeTimes(9, 2)
 
-    TDS:UpgradeTimes(5, 2)
-
     TDS:Upgrade(4)
 
     TDS:Place("Commander", -2.44934034347534180, 102.99324035644531250, 108.44250488281250000)
@@ -137,7 +135,7 @@ local function RunNight3Easy(TDS)
     TDS:Upgrade(6)
     TDS:Upgrade(8)
     TDS:Upgrade(9)
-
+    TDS:UpgradeTimes(5, 2)
     TDS:Upgrade(4)
     TDS:Upgrade(10)
     TDS:SetOption(5, "Track", "Red")
