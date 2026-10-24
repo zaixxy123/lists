@@ -64,6 +64,7 @@ return function(Context)
 
 
     -- Tower support automation (per API instance).
+    local HttpService = game:GetService("HttpService")
     local TowerAutoFlags = {Commander=false, DJ=false, Necromancer=false}
     local TowerAutoRunning = {Commander=false, DJ=false, Necromancer=false}
     local function SupportTowers(name, minLevel)
@@ -382,8 +383,6 @@ return function(Context)
 
     function TDS:Loadout(...)
         local requested = {...}
-        local hasMercenaryBase = false
-
         for _, towerName in ipairs(requested) do
             towerName = tostring(towerName)
 
@@ -398,27 +397,10 @@ return function(Context)
                         )
                     end)
                 end
-            elseif towerName == "Mercenary Base" then
-                hasMercenaryBase = true
-            elseif towerName == "Commander" then
-                TowerAutoFlags.Commander = true
-                StartSupportAuto("Commander")
-            elseif towerName == "DJ Booth" then
-                TowerAutoFlags.DJ = true
-                StartSupportAuto("DJ")
             elseif towerName == "Necromancer" then
                 TowerAutoFlags.Necromancer = true
                 StartSupportAuto("Necromancer")
             end
-        end
-
-        self.HasMercenaryBase =
-            hasMercenaryBase
-
-        if self.AutoMercenaryEnabled ~= false
-            and self.HasMercenaryBase then
-
-            self:Mercenary()
         end
 
         return DirectSetLoadout(
@@ -1060,6 +1042,55 @@ return function(Context)
 
         return true
     end
+
+    local function ReadEquippedSupportTowers()
+        local reps = ReplicatedStorage:FindFirstChild("StateReplicators")
+        if not reps then return nil end
+        for _, rep in ipairs(reps:GetChildren()) do
+            if tonumber(rep:GetAttribute("UserId")) == plr.UserId then
+                local raw = rep:GetAttribute("EquippedTowers")
+                local json = type(raw) == "string" and raw:match("%[.*%]")
+                if not json then return nil end
+                local ok, towers = pcall(HttpService.JSONDecode, HttpService, json)
+                if not ok or type(towers) ~= "table" then return nil end
+                local equipped = {}
+                for _, name in ipairs(towers) do
+                    if type(name) == "string" then equipped[name] = true end
+                end
+                return equipped
+            end
+        end
+        return nil
+    end
+
+    RuntimeGlobals.API1EquippedWatchVersion =
+        (tonumber(RuntimeGlobals.API1EquippedWatchVersion) or 0) + 1
+    local watchVersion = RuntimeGlobals.API1EquippedWatchVersion
+    task.spawn(function()
+        while RuntimeGlobals.API1EquippedWatchVersion == watchVersion do
+            local state = GetDirectGameStateReplicator()
+            if state
+                and state:GetAttribute("GameStarted") == true
+                and state:GetAttribute("GameOver") ~= true then
+                local equipped = ReadEquippedSupportTowers()
+                if equipped then
+                    TowerAutoFlags.Commander = equipped.Commander == true
+                    TowerAutoFlags.DJ = equipped["DJ Booth"] == true
+                    TDS.HasMercenaryBase = equipped["Mercenary Base"] == true
+                    if TowerAutoFlags.Commander then StartSupportAuto("Commander") end
+                    if TowerAutoFlags.DJ then StartSupportAuto("DJ") end
+                    if TDS.HasMercenaryBase and TDS.AutoMercenaryEnabled ~= false then
+                        TDS:Mercenary()
+                    end
+                end
+            else
+                TowerAutoFlags.Commander = false
+                TowerAutoFlags.DJ = false
+                TDS.HasMercenaryBase = false
+            end
+            task.wait(0.5)
+        end
+    end)
 
     function TDS:Ability(index, abilityName, data, loop)
         index =
