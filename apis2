@@ -2488,6 +2488,28 @@ end)
 shared.TDSTable = TDS
 shared["TDS_Table"] = TDS
 
+function TDS:MedicSelect(medicIndex, targetIndex)
+    local medic = self.PlacedTowers[tonumber(medicIndex)]
+    local target = self.PlacedTowers[tonumber(targetIndex)]
+
+    if not medic or not medic.Parent
+        or not target or not target.Parent then
+        return false
+    end
+
+    local ok, result = pcall(function()
+        return rf:InvokeServer(
+            "Troops",
+            "TowerServerEvent",
+            "ToggleSelectedTower",
+            medic,
+            target
+        )
+    end)
+
+    return ok and result ~= false
+end
+
 local MedicChainAPI
 
 function TDS:MedicChain(...)
