@@ -4,10 +4,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Remote = ReplicatedStorage:WaitForChild("RemoteFunction")
 
 Night.Requirements = {
-    Easy = {"Electroshocker", "Crook Boss", "DJ Booth", "Commander", "Turret"}
+    Easy = {"Electroshocker", "Crook Boss", "DJ Booth", "Commander", "Turret"},
+    Hard = {"Trapper", "Gatling Gun", "Turret", "Mercenary Base"}
 }
 
-local function EquipNight3EasyLobbyLoadout()
+local function EquipNight3LobbyLoadout(mode)
     local stateReplicators = ReplicatedStorage:WaitForChild("StateReplicators", 10)
     if not stateReplicators then return false end
 
@@ -45,7 +46,7 @@ local function EquipNight3EasyLobbyLoadout()
     end
 
     task.wait(0.2)
-    for _, tower in ipairs(Night.Requirements.Easy) do
+    for _, tower in ipairs(Night.Requirements[mode]) do
         remoteEvent:FireServer("Inventory", "Equip", "Tower", tower)
         task.wait(0.3)
     end
@@ -54,15 +55,15 @@ local function EquipNight3EasyLobbyLoadout()
 end
 
 function Night.PrepareLobby(mode)
-    if mode == "Easy" then return EquipNight3EasyLobbyLoadout() end
-    return false
+    if not Night.Requirements[mode] then return false end
+    return EquipNight3LobbyLoadout(mode)
 end
 
 function Night.Queue(mode)
-    if mode ~= "Easy" then return false end
+    if mode ~= "Easy" and mode ~= "Hard" then return false end
     local ok, result = pcall(function()
         return Remote:InvokeServer("Multiplayer", "v2:start", {
-            difficulty = "Act3Easy",
+            difficulty = mode == "Easy" and "Act3Easy" or "Act3",
             night = 3,
             count = 1,
             mode = "halloween2026"
@@ -164,8 +165,80 @@ local function RunNight3Easy(TDS)
     return true
 end
 
+local function RunNight3Hard(TDS)
+    TDS:Loadout("Trapper", "Gatling Gun", "Turret", "Mercenary Base")
+    local manager = ReplicatedStorage:WaitForChild("Network"):WaitForChild("PlayerManager")
+    manager["RE:SelectLoadout"]:FireServer()
+    task.wait(0.2)
+    manager["RE:UserLoadout"]:FireServer()
+
+    TDS:Place("Trapper", -1.69024848937988281, 103.02556610107421875, 109.64415740966796875)
+    TDS:Place("Trapper", -4.03205108642578125, 102.99209594726562500, 107.58445739746093750)
+    TDS:Upgrade(1)
+    TDS:Ready()
+
+    TDS:Upgrade(2)
+    TDS:Upgrade(1)
+    TDS:SetOption(1, "Trap", "Landmine")
+
+    TDS:VoteSkip(5)
+    TDS:WaitForWave(6)
+
+    TDS:Sell(1)
+    TDS:Sell(2)
+
+    TDS:Place("Gatling Gun", 4.19032096862792969, 101.01975250244140625, 78.41510009765625000)
+    TDS:UpgradeTimes(3, 2)
+
+    TDS:Place("Turret", -5.52445650100708008, 103.01557159423828125, 107.20062255859375000)
+    TDS:UpgradeTimes(4, 2)
+
+    TDS:Place("Turret", 6.10501670837402344, 102.89367675781250000, 106.11018371582031250)
+    TDS:UpgradeTimes(5, 2)
+
+    TDS:Place("Turret", -7.21452140808105469, 103.22519683837890625, 114.48966979980468750)
+    TDS:UpgradeTimes(6, 2)
+
+    TDS:Upgrade(3)
+
+    TDS:Place("Mercenary Base", -0.18347468972206116, 100.99746704101562500, 78.94009399414062500)
+    TDS:UpgradeTimes(7, 3)
+
+    TDS:Upgrade(4)
+    TDS:Upgrade(5)
+    TDS:Upgrade(6)
+
+    TDS:Upgrade(3)
+
+    TDS:Upgrade(7)
+    TDS:SetOption(7, "Unit 1", "Riot Guard")
+    TDS:SetOption(7, "Unit 2", "Riot Guard")
+    TDS:SetOption(7, "Unit 3", "Riot Guard")
+
+    TDS:Place("Mercenary Base", -0.60532903671264648, 102.99864196777343750, 108.64323425292968750)
+    TDS:UpgradeTimes(8, 4)
+    TDS:SetOption(8, "Unit 1", "Riot Guard")
+    TDS:SetOption(8, "Unit 2", "Riot Guard")
+    TDS:SetOption(8, "Unit 3", "Riot Guard")
+
+    TDS:Upgrade(4)
+    TDS:UpgradeTimes(3, 2)
+    TDS:UpgradeTimes(7, 2)
+
+    TDS:Upgrade(5)
+
+    TDS:Upgrade(4)
+    TDS:Upgrade(5)
+    TDS:Upgrade(6)
+
+    TDS:UpgradeTimes(8, 2)
+
+    return true
+end
+
 function Night.Run(mode, TDS)
     if mode == "Easy" then return RunNight3Easy(TDS) end
+    if mode == "Hard" then return RunNight3Hard(TDS) end
     return false
 end
 
