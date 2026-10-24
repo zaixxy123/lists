@@ -2406,6 +2406,66 @@ function TDS:LoopAbility(index, abilityName, data)
 end
 
 
+
+-- Automatically vote to skip event/story cutscenes only.
+-- This is separate from the normal wave skip configuration.
+local function IsCutsceneSkipVoteActive()
+    local voteReplicator = GetDirectVoteReplicator()
+
+    if voteReplicator
+        and voteReplicator:GetAttribute("Enabled") == true
+        and tostring(voteReplicator:GetAttribute("Title") or "")
+            :lower():find("skip cutscene", 1, true) then
+
+        return true
+    end
+
+    local voteGui = PlayerGui:FindFirstChild("ReactOverridesVote")
+    local frame = voteGui and voteGui:FindFirstChild("Frame")
+    local votes = frame and frame:FindFirstChild("votes")
+    local vote = votes and votes:FindFirstChild("vote")
+    local prompt = vote and vote:FindFirstChild("prompt")
+
+    return voteGui ~= nil
+        and voteGui.Enabled == true
+        and frame ~= nil
+        and frame.Visible == true
+        and votes ~= nil
+        and votes.Visible == true
+        and vote ~= nil
+        and vote.Visible == true
+        and prompt ~= nil
+        and prompt:IsA("TextLabel")
+        and tostring(prompt.Text):lower():find("skip cutscene", 1, true) ~= nil
+end
+
+local cutsceneSkipGlobals = (getgenv and getgenv()) or _G
+cutsceneSkipGlobals.TDSCutsceneSkipVersion =
+    (tonumber(cutsceneSkipGlobals.TDSCutsceneSkipVersion) or 0) + 1
+
+local cutsceneSkipVersion = cutsceneSkipGlobals.TDSCutsceneSkipVersion
+
+task.spawn(function()
+    local lastSkipAt = 0
+
+    while cutsceneSkipGlobals.TDSCutsceneSkipVersion == cutsceneSkipVersion do
+        if IsCutsceneSkipVoteActive() then
+            if os.clock() - lastSkipAt >= 2 then
+                lastSkipAt = os.clock()
+                task.spawn(function()
+                    pcall(function()
+                        rf:InvokeServer("Voting", "Skip")
+                    end)
+                end)
+            end
+        else
+            lastSkipAt = 0
+        end
+
+        task.wait(0.2)
+    end
+end)
+
 shared.TDSTable = TDS
 shared["TDS_Table"] = TDS
 
