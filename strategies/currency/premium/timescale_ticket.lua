@@ -43,7 +43,6 @@ return {
     },
 
     Requirements = {
-        MinimumLevel = 175,
 
         RequiredTowers = {
             "Gatling Gun",
