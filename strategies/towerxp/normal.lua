@@ -4,7 +4,7 @@ return function(TDS)
     TDS:Mode("Hardcore")
     TDS:GameInfo("Wretched Front")
 
-    TDS:VoteSkip(1,23)
+    TDS:VoteSkip()
 
     TDS:Place("Pyromancer", -5.936307430267334, 0.9551397562026978, -31.831748962402344, true)
     TDS:Ready()
