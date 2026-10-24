@@ -1773,28 +1773,10 @@ function TDS:Loadout(...)
             requested
         )
 
-    self.HasCommander =
-        HasLoadoutTower(
-            requested,
-            "Commander"
-        )
-
     self.HasNecromancer =
         HasLoadoutTower(
             requested,
             "Necromancer"
-        )
-
-    self.HasDJBooth =
-        HasLoadoutTower(
-            requested,
-            "DJ Booth"
-        )
-
-    self.HasMercenaryBase =
-        HasLoadoutTower(
-            requested,
-            "Mercenary Base"
         )
 
     if self.HasGatlingGun then
@@ -1805,20 +1787,8 @@ function TDS:Loadout(...)
         return false
     end
 
-    if self.HasCommander then
-        StartAutoCommanderChain()
-    end
-
-    if self.HasDJBooth then
-        StartAutoDJ()
-    end
-
     if self.HasNecromancer then
         StartAutoNecromancer()
-    end
-
-    if self.HasMercenaryBase then
-        StartAutoMercenary()
     end
 
     return DirectSetLoadout(
@@ -1827,6 +1797,55 @@ function TDS:Loadout(...)
         )
     )
 end
+
+local function ReadEquippedSupportTowers()
+    local reps = GetDirectStateReplicators()
+    if not reps then return nil end
+    for _, rep in ipairs(reps:GetChildren()) do
+        if tonumber(rep:GetAttribute("UserId")) == plr.UserId then
+            local raw = rep:GetAttribute("EquippedTowers")
+            local json = type(raw) == "string" and raw:match("%[.*%]")
+            if not json then return nil end
+            local ok, towers = pcall(HttpService.JSONDecode, HttpService, json)
+            if not ok or type(towers) ~= "table" then return nil end
+            local equipped = {}
+            for _, name in ipairs(towers) do
+                if type(name) == "string" then equipped[name] = true end
+            end
+            return equipped
+        end
+    end
+    return nil
+end
+
+local equippedWatchGlobals = getgenv()
+equippedWatchGlobals.API2EquippedWatchVersion =
+    (tonumber(equippedWatchGlobals.API2EquippedWatchVersion) or 0) + 1
+local equippedWatchVersion = equippedWatchGlobals.API2EquippedWatchVersion
+
+task.spawn(function()
+    while equippedWatchGlobals.API2EquippedWatchVersion == equippedWatchVersion do
+        local state = GetDirectGameStateReplicator()
+        if state
+            and state:GetAttribute("GameStarted") == true
+            and state:GetAttribute("GameOver") ~= true then
+            local equipped = ReadEquippedSupportTowers()
+            if equipped then
+                TDS.HasCommander = equipped.Commander == true
+                TDS.HasDJBooth = equipped["DJ Booth"] == true
+                TDS.HasMercenaryBase = equipped["Mercenary Base"] == true
+                if TDS.HasCommander then StartAutoCommanderChain() end
+                if TDS.HasDJBooth then StartAutoDJ() end
+                if TDS.HasMercenaryBase then StartAutoMercenary() end
+            end
+        else
+            TDS.HasCommander = false
+            TDS.HasDJBooth = false
+            TDS.HasMercenaryBase = false
+        end
+        task.wait(0.5)
+    end
+end)
 
 local function BuildMatchmakingPayload(
     difficulty
