@@ -834,6 +834,24 @@ local function GetFarm()
 end
 
 local function GetFarmStatus(mode)
+    if mode == "auto_arcade" then
+        if Globals.AutoArcadeEnabled ~= true then
+            return "Idle"
+        end
+
+        local rep = GetGameReplicator()
+        if rep and rep:GetAttribute("GameOver") == true then
+            return "Returning to Lobby..."
+        end
+
+        if game.PlaceId == LOBBY_PLACE_ID then
+            return "Arcade Matchmaking..."
+        end
+
+        return "Running Auto Arcade - "
+            .. tostring(Globals.ArcadeMode or "Pizza Party")
+    end
+
     if mode == "auto_event" then
         if Globals.AutoEventEnabled ~= true then
             return "Idle"
@@ -954,6 +972,10 @@ local function GetFarmStatus(mode)
 end
 
 local function DetectMode()
+    if Globals.AutoArcadeEnabled == true then
+        return "auto_arcade"
+    end
+
     if Globals.AutoEventEnabled == true then
         return "auto_event"
     end
@@ -1003,7 +1025,9 @@ local function GetModeRunningLabel(mode)
     end
 
     local active =
-        (mode == "auto_event"
+        (mode == "auto_arcade"
+            and Globals.AutoArcadeEnabled == true)
+        or (mode == "auto_event"
             and Globals.AutoEventEnabled == true)
         or (mode == "auto_strategy"
             and Globals.AutoStrategyEnabled == true)
@@ -2875,6 +2899,48 @@ local function BuildAutoEventEmbed(snapshot, data)
     return title, fields
 end
 
+local function BuildAutoArcadeEmbed(snapshot, data)
+    local fields = {}
+    local complete = tostring(data.EventType or "") == "match_complete"
+    local arcadeMode = tostring(Globals.ArcadeMode or "Pizza Party")
+
+    if arcadeMode == "" then
+        arcadeMode = "Pizza Party"
+    end
+
+    local title = complete
+        and "🕹️ Auto Arcade — Match Complete"
+        or "🕹️ Auto Arcade — Current Progress"
+
+    AddField(
+        fields,
+        "🕹️ Arcade Overview",
+        "┃ Status: **" .. GetModeRunningLabel("auto_arcade")
+            .. "**\n┃ Current State: **" .. GetFarmStatus("auto_arcade")
+            .. "**\n┃ Arcade: **" .. arcadeMode .. "**",
+        false
+    )
+
+    if complete then
+        AddField(
+            fields,
+            "✨ Match Rewards",
+            BuildMatchRewardsField(data.Rewards or {}),
+            false
+        )
+    end
+
+    AddField(
+        fields,
+        "📊 Account Stats",
+        "Level: **" .. FormatNumber(snapshot.Level) .. "**\n"
+            .. BuildCurrencyBalanceField(snapshot, false),
+        false
+    )
+
+    return title, fields
+end
+
 local function BuildGenericEmbed(
     snapshot
 )
@@ -2949,7 +3015,13 @@ local function BuildEmbed(
     local title
     local fields
 
-    if mode == "auto_event" then
+    if mode == "auto_arcade" then
+        title, fields =
+            BuildAutoArcadeEmbed(
+                snapshot,
+                data
+            )
+    elseif mode == "auto_event" then
         title, fields =
             BuildAutoEventEmbed(
                 snapshot,
