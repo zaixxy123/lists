@@ -527,7 +527,8 @@ return function(Context)
         )
     end
 
-    local function GetAutoSkipButton()
+    -- VIP Auto Skip: use the game's settings toggle, not skip votes.
+    local function GetAutoSkipControls()
         local playerGui = plr:FindFirstChild("PlayerGui")
         local settings = playerGui and playerGui:FindFirstChild("ReactUniversalSettings")
         local window = settings and settings:FindFirstChild("window")
@@ -536,31 +537,36 @@ return function(Context)
         local autoSkip = unknown and unknown:FindFirstChild("Auto Skip")
         local button = autoSkip and autoSkip:FindFirstChild("button")
         local toggle = button and button:FindFirstChild("toggle")
+        local imageButton = toggle and toggle:FindFirstChild("imageButton")
 
-        return toggle and toggle:FindFirstChild("imageButton")
+        return imageButton, button, autoSkip
     end
 
     local function GetAutoSkipState()
-        local button = GetAutoSkipButton()
+        local imageButton, button, autoSkip = GetAutoSkipControls()
 
-        if not button then
-            return nil
-        end
-
-        local contentText = button:FindFirstChild("contentText")
-
-        if not contentText then
-            return nil
-        end
-
-        local text = tostring(contentText.Text):lower()
-
-        if text == "enabled" then
-            return true
-        end
-
-        if text == "disabled" then
-            return false
+        -- contentText can live under the toggle, its parent button,
+        -- or the Auto Skip setting entry; don't assume one exact parent.
+        for _, root in ipairs({imageButton, button, autoSkip}) do
+            if root then
+                local label = root:FindFirstChild("contentText", true)
+                if label then
+                    local ok, value = pcall(function()
+                        return label.Text
+                    end)
+                    if not ok then
+                        ok, value = pcall(function()
+                            return label.Value
+                        end)
+                    end
+                    if ok then
+                        local state = tostring(value or ""):lower()
+                            :gsub("^%s+", ""):gsub("%s+$", "")
+                        if state == "enabled" then return true end
+                        if state == "disabled" then return false end
+                    end
+                end
+            end
         end
 
         return nil
@@ -569,56 +575,60 @@ return function(Context)
     local AutoSkipPendingState = nil
     local AutoSkipLastClickAt = 0
 
-    local function ToggleAutoSkip()
-        local button =
-            GetAutoSkipButton()
-
-        if not button
-            or type(getconnections) ~= "function" then
-
-            return false
+    local function FireToggleSignal(signal)
+        if type(getconnections) == "function" then
+            local ok, connections = pcall(getconnections, signal)
+            if ok and type(connections) == "table" and #connections > 0 then
+                local fired = false
+                for _, connection in ipairs(connections) do
+                    local success = pcall(function()
+                        connection:Fire()
+                    end)
+                    if not success and type(connection.Function) == "function" then
+                        success = pcall(connection.Function)
+                    end
+                    fired = success or fired
+                end
+                if fired then return true end
+            end
         end
 
-        local downConnections =
-            getconnections(
-                button.MouseButton1Down
-            )
-
-        local upConnections =
-            getconnections(
-                button.MouseButton1Up
-            )
-
-        if #downConnections == 0
-            or #upConnections == 0 then
-
-            return false
+        if type(firesignal) == "function" then
+            return pcall(firesignal, signal)
         end
 
-        for _, connection in ipairs(
-            downConnections
-        ) do
-            pcall(function()
-                connection.Function()
-            end)
-        end
-
-        task.wait(0.05)
-
-        for _, connection in ipairs(
-            upConnections
-        ) do
-            pcall(function()
-                connection.Function()
-            end)
-        end
-
-        return true
+        return false
     end
 
-    SetAutoSkip = function(enabled)
-        enabled = enabled == true
+    local function ToggleAutoSkip(expectedState)
+        local imageButton = GetAutoSkipControls()
+        if not imageButton then return false end
 
+        -- Try the event the UI listens to; re-read the actual setting
+        -- before attempting another event so a successful click is
+        -- never immediately reversed.
+        for _, signalName in ipairs({
+            "MouseButton1Click",
+            "Activated",
+            "MouseButton1Down",
+            "MouseButton1Up"
+        }) do
+            local ok, signal = pcall(function()
+                return imageButton[signalName]
+            end)
+            if ok and signal and FireToggleSignal(signal) then
+                task.wait(0.25)
+                if GetAutoSkipState() == expectedState then
+                    return true
+                end
+            end
+        end
+
+        return GetAutoSkipState() == expectedState
+    end
+
+    local function SetAutoSkip(enabled)
+        enabled = enabled == true
         local current = GetAutoSkipState()
 
         if current == nil then
@@ -631,29 +641,16 @@ return function(Context)
         end
 
         if AutoSkipPendingState == enabled
-            and os.clock() - AutoSkipLastClickAt < 0.5 then
-
+            and os.clock() - AutoSkipLastClickAt < 0.75 then
             return false
         end
 
         AutoSkipPendingState = enabled
         AutoSkipLastClickAt = os.clock()
 
-        if not ToggleAutoSkip() then
-            AutoSkipPendingState = nil
-            return false
-        end
-
-        task.wait(0.15)
-
-        current = GetAutoSkipState()
-
-        if current == enabled then
-            AutoSkipPendingState = nil
-            return true
-        end
-
-        return false
+        local result = ToggleAutoSkip(enabled)
+        if result then AutoSkipPendingState = nil end
+        return result
     end
 
     local function GetCurrentWaveNoWait()
@@ -725,14 +722,6 @@ return function(Context)
 
     local function UpdateVIPAutoSkip()
         if not VoteSkipConfigured then
-            -- ResetIndex must not click the VIP setting to Disabled.
-            return
-        end
-
-        if RuntimeGlobals.AutoFarmTowerXP == true then
-            -- During Tower XP, keep the player's VIP Auto Skip setting
-            -- Enabled instead of toggling it back to Disabled.
-            SetAutoSkip(true)
             return
         end
 
