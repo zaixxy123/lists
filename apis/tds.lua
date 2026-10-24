@@ -41,11 +41,13 @@ return function(Context)
     local VIP_GAMEPASS_ID = 10518590
 
     local RuntimeGlobals = getgenv()
-    RuntimeGlobals.VIPVoteSkipVersion =
-        (tonumber(RuntimeGlobals.VIPVoteSkipVersion) or 0) + 1
+    -- This worker must not be canceled when the standalone apis2
+    -- module is loaded elsewhere in the session.
+    RuntimeGlobals.AutoProgressVIPVoteSkipVersion =
+        (tonumber(RuntimeGlobals.AutoProgressVIPVoteSkipVersion) or 0) + 1
 
     local VIPVoteSkipVersion =
-        RuntimeGlobals.VIPVoteSkipVersion
+        RuntimeGlobals.AutoProgressVIPVoteSkipVersion
 
     local HasVIP = Context.HasVIP
 
@@ -723,7 +725,14 @@ return function(Context)
 
     local function UpdateVIPAutoSkip()
         if not VoteSkipConfigured then
-            SetAutoSkip(false)
+            -- ResetIndex must not click the VIP setting to Disabled.
+            return
+        end
+
+        if RuntimeGlobals.AutoFarmTowerXP == true then
+            -- During Tower XP, keep the player's VIP Auto Skip setting
+            -- Enabled instead of toggling it back to Disabled.
+            SetAutoSkip(true)
             return
         end
 
@@ -751,7 +760,7 @@ return function(Context)
 
         task.spawn(function()
             while IsStrategyRuntimeEnabled()
-                and RuntimeGlobals.VIPVoteSkipVersion
+                and RuntimeGlobals.AutoProgressVIPVoteSkipVersion
                     == VIPVoteSkipVersion do
 
                 UpdateVIPAutoSkip()
@@ -807,8 +816,12 @@ return function(Context)
         if startWave == nil and endWave == nil then
             VoteSkipAll = true
 
-            -- Use direct votes instead of clicking the VIP settings toggle.
-            StartDirectAutoSkip()
+            if HasVIP then
+                UpdateVIPAutoSkip()
+                StartVIPVoteSkip()
+            else
+                StartDirectAutoSkip()
+            end
 
             return true
         end
@@ -840,9 +853,13 @@ return function(Context)
             VoteSkipWaves[wave] = true
         end
 
-        -- Never toggle Auto Skip in Roblox settings; only vote on
-        -- the configured waves using the active skip prompt.
-        StartNormalVoteSkip()
+        if HasVIP then
+            -- Click the game's VIP Auto Skip setting, not the vote remote.
+            UpdateVIPAutoSkip()
+            StartVIPVoteSkip()
+        else
+            StartNormalVoteSkip()
+        end
 
         return true
     end
