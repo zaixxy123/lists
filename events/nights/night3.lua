@@ -55,8 +55,9 @@ local function EquipNight3LobbyLoadout(mode)
 end
 
 function Night.PrepareLobby(mode)
-    if not Night.Requirements[mode] then return false end
-    return EquipNight3LobbyLoadout(mode)
+    if mode == "Hard" then return true end
+    if mode == "Easy" then return EquipNight3LobbyLoadout(mode) end
+    return false
 end
 
 function Night.Queue(mode)
