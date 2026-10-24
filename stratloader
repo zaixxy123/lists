@@ -201,6 +201,10 @@ return function(Context)
 
     LoadSaved()
 
+    Globals.AutoRestartStrategy =
+        Saved.AutoRestartStrategy == true
+    Globals.AutoStrategyAutoSkip =
+        Saved.AutoSkipStrategy == true
     Globals.AutoStrategyForceAutoSkip =
         Saved.AutoSkipStrategy == true
 
@@ -1800,6 +1804,9 @@ return function(Context)
                 Saved.AutoRestartStrategy =
                     value == true
 
+                Globals.AutoRestartStrategy =
+                    Saved.AutoRestartStrategy == true
+
                 Save()
             end
         })
@@ -1813,6 +1820,8 @@ return function(Context)
                 Saved.AutoSkipStrategy =
                     value == true
 
+                Globals.AutoStrategyAutoSkip =
+                    Saved.AutoSkipStrategy == true
                 Globals.AutoStrategyForceAutoSkip =
                     Saved.AutoSkipStrategy == true
 
