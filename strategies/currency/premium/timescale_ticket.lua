@@ -51,7 +51,8 @@ return {
             "Trapper",
             "DJ Booth",
             "Militant",
-            "Military Base"
+            "Military Base",
+            "Mercenary Base"
         }
     }
 }
