@@ -167,10 +167,8 @@ end
 
 local function RunNight3Hard(TDS)
     TDS:Loadout("Trapper", "Gatling Gun", "Turret", "Mercenary Base")
-    local manager = ReplicatedStorage:WaitForChild("Network"):WaitForChild("PlayerManager")
-    manager["RE:SelectLoadout"]:FireServer()
-    task.wait(0.2)
-    manager["RE:UserLoadout"]:FireServer()
+    TDS:VoteSkip(5)
+    TDS:VoteSkip(10,24)
 
     TDS:Place("Trapper", -1.69024848937988281, 103.02556610107421875, 109.64415740966796875)
     TDS:Place("Trapper", -4.03205108642578125, 102.99209594726562500, 107.58445739746093750)
@@ -180,9 +178,6 @@ local function RunNight3Hard(TDS)
     TDS:Upgrade(2)
     TDS:Upgrade(1)
     TDS:SetOption(1, "Trap", "Landmine")
-
-    TDS:VoteSkip(5)
-    TDS:VoteSkip(10,24)
     TDS:WaitForWave(6)
 
     TDS:Sell(1)
