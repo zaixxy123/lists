@@ -24,7 +24,8 @@ return {
                 "Gatling Gun",
                 "Mercenary Base",
                 "Trapper",
-                "DJ Booth"
+                "DJ Booth",
+                "Medic"
             }
         }
     },
