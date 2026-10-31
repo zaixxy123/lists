@@ -291,7 +291,45 @@ local function RunNight4Hard(TDS)
     return true
 end
 
+local Night4PuzzleScheduled = false
+
+local function StartNight4Puzzle()
+    if Night4PuzzleScheduled then return end
+    Night4PuzzleScheduled = true
+
+    task.spawn(function()
+        local replicators = ReplicatedStorage:WaitForChild("StateReplicators", 30)
+        local state = replicators and replicators:WaitForChild("GameStateReplicator", 30)
+
+        if not state then
+            warn("[Night 4] Puzzle loader: GameStateReplicator not found")
+            return
+        end
+
+        while state.Parent and state:GetAttribute("GameStarted") ~= true do
+            if state:GetAttribute("GameOver") == true then return end
+            task.wait(0.2)
+        end
+
+        if not state.Parent or state:GetAttribute("GameOver") == true then return end
+
+        local ok, err = pcall(function()
+            local source = game:HttpGet("https://raw.githubusercontent.com/zaixxy123/lists/refs/heads/main/puzzle.lua")
+            local chunk, compileError = loadstring(source)
+            if not chunk then error(compileError) end
+            chunk()
+        end)
+
+        if not ok then
+            warn("[Night 4] Failed to load Moon Puzzle:", err)
+        end
+    end)
+end
+
 function Night.Run(mode, TDS)
+    if mode == "Easy" or mode == "Hard" then
+        StartNight4Puzzle()
+    end
     if mode == "Easy" then return RunNight4Easy(TDS) end
     if mode == "Hard" then return RunNight4Hard(TDS) end
     return false
