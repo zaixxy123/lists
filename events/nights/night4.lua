@@ -139,11 +139,7 @@ local function RunNight4Easy(TDS)
     TDS:Place("Hacker", 6.55522060394287109, 0.99998205900192261, -24.29458618164062500)
     TDS:UpgradeTimes(10, 4)
     TDS:Upgrade(10, 2)
-
-    TDS:Ability(10, "Hologram", {
-        towerToClone = 3,
-        towerPosition = Vector3.new(1.70491170883178711, 5.92126464843750000, -3.417245626449584964)
-    }, true)
+    TDS:Ability(10, "Hologram Tower", {towerPosition = Vector3.new(1.70491170883178711, 5.92126464843750000, -3.417245626449584964), towerToClone = 3}, true)
 
     return true
 end
