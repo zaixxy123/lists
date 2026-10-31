@@ -11,7 +11,8 @@ return {
         "Gatling Gun",
         "Mercenary Base",
         "Trapper",
-        "DJ Booth"
+        "DJ Booth",
+        "Medic"
     },
     Priority = {
         "Lay By",
