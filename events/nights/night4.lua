@@ -327,7 +327,7 @@ local function StartNight4Puzzle()
 end
 
 function Night.Run(mode, TDS)
-    if mode == "Easy" or mode == "Hard" then
+    if mode == "Hard" then
         StartNight4Puzzle()
     end
     if mode == "Easy" then return RunNight4Easy(TDS) end
