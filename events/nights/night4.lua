@@ -333,6 +333,17 @@ local function StartNight4HardTimeScale(TDS)
         local state = replicators and replicators:FindFirstChild("GameStateReplicator")
         if not state or state:GetAttribute("GameOver") == true then return end
 
+        local playerGui = Players.LocalPlayer:FindFirstChild("PlayerGui")
+        local hotbar = playerGui and playerGui:FindFirstChild("ReactUniversalHotbar")
+        local frame = hotbar and hotbar:FindFirstChild("Frame")
+        local timescale = frame and frame:FindFirstChild("timescale")
+        local speedLabel = timescale and timescale:FindFirstChild("Speed")
+        local currentSpeed = speedLabel and tonumber(
+            tostring(speedLabel.Text or ""):match("x([%d%.]+)")
+        )
+
+        if currentSpeed ~= 2 then return end
+
         globals.Night4HardTimeScaleOverride = 1
 
         if type(globals.ApplyTimeScaleOnce) == "function" then
