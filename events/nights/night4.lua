@@ -5,7 +5,7 @@ local Remote = ReplicatedStorage:WaitForChild("RemoteFunction")
 
 Night.Requirements = {
     Easy = {"Trapper", "Hacker", "Gatling Gun", "Turret", "Mercenary Base"},
-    Hard = {"DJ Booth", "Hacker", "Gatling Gun", "Scout", "Ranger", "Mercenary Base"}
+    Hard = {"DJ Booth", "Hacker", "Gatling Gun", "Golden Scout", "Ranger", "Mercenary Base"}
 }
 
 local function EquipNight4LobbyLoadout(mode)
@@ -54,8 +54,38 @@ local function EquipNight4LobbyLoadout(mode)
     return true
 end
 
+local function HasGoldenScoutSkin()
+    local client = ReplicatedStorage:FindFirstChild("Client")
+    local modules = client and client:FindFirstChild("Modules")
+    local cacheModule = modules and modules:FindFirstChild("Cache")
+    if not cacheModule then return false end
+
+    local ok, skins = pcall(function()
+        local Cache = require(cacheModule)
+        return Cache("Inventory.Skins"):GetValue() or {}
+    end)
+    if not ok or type(skins) ~= "table" then return false end
+
+    local scoutSkins = skins.Scout
+    if type(scoutSkins) ~= "table" then return false end
+
+    for _, skin in ipairs(scoutSkins) do
+        if type(skin) == "table" and skin.Name == "Golden" then
+            return true
+        end
+    end
+
+    return false
+end
+
 function Night.PrepareLobby(mode)
-    if mode == "Hard" then return true end
+    if mode == "Hard" then
+        if not HasGoldenScoutSkin() then
+            warn("[Night 4 Hard] Required skin not owned: Golden Scout")
+            return false
+        end
+        return true
+    end
     if mode == "Easy" then return EquipNight4LobbyLoadout(mode) end
     return false
 end
