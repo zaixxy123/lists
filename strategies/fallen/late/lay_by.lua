@@ -23,7 +23,7 @@ TDS:GameInfo("Lay By", {
 })
 
 TDS:VoteSkip(8, 28)
-TDS:VoteSkip(33, 36)
+TDS:VoteSkip(33, 35)
 TDS:MedicChain(3, "Hologram")
 TDS:Place("Trapper", -2.6489198207855225, 243, 176)
 TDS:Ready()
