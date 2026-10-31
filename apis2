@@ -1924,6 +1924,53 @@ local function BuildMatchmakingPayload(
     }
 end
 
+local Act4PuzzleScheduled = false
+
+local function ScheduleAct4Puzzle()
+    if Act4PuzzleScheduled or game.PlaceId == LOBBY_PLACE_ID then
+        return
+    end
+
+    Act4PuzzleScheduled = true
+    task.spawn(function()
+        local stateReplicators = ReplicatedStorage:WaitForChild("StateReplicators", 30)
+        local state = stateReplicators and stateReplicators:WaitForChild("GameStateReplicator", 30)
+        if not state then
+            warn("[apis2] Act4 puzzle: game state not found")
+            return
+        end
+
+        while state.Parent
+            and state:GetAttribute("GameStarted") ~= true
+            and state:GetAttribute("GameOver") ~= true
+            and TDS.SavedDifficulty == "Act4" do
+            task.wait(0.2)
+        end
+
+        if not state.Parent or state:GetAttribute("GameStarted") ~= true
+            or state:GetAttribute("GameOver") == true
+            or TDS.SavedDifficulty ~= "Act4" then
+            return
+        end
+
+        local globals = getgenv()
+        if type(globals._MoonPuzzleCleanup) == "function" then return end
+
+        local ok, err = pcall(function()
+            local source = game:HttpGet(
+                "https://raw.githubusercontent.com/zaixxy123/lists/refs/heads/main/puzzle.lua"
+            )
+            local chunk, compileError = loadstring(source)
+            if not chunk then error(compileError) end
+            chunk()
+        end)
+
+        if not ok then
+            warn("[apis2] Failed to load Act4 puzzle:", err)
+        end
+    end)
+end
+
 function TDS:Mode(difficulty)
     difficulty =
         tostring(
@@ -1948,6 +1995,10 @@ function TDS:Mode(difficulty)
         BuildMatchmakingPayload(
             difficulty
         )
+
+    if difficulty == "Act4" then
+        ScheduleAct4Puzzle()
+    end
 
     local lobbyHud =
         PlayerGui:FindFirstChild(
