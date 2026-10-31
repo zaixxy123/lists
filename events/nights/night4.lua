@@ -287,6 +287,36 @@ local function RunNight4Hard(TDS)
     return true
 end
 
+local Night4HardTimeScaleScheduled = false
+
+local function StartNight4HardTimeScale(TDS)
+    if Night4HardTimeScaleScheduled then return end
+    Night4HardTimeScaleScheduled = true
+
+    local globals = getgenv()
+    globals.Night4HardTimeScaleOverride = nil
+
+    task.spawn(function()
+        if not TDS:WaitForWave(30) then return end
+
+        local replicators = ReplicatedStorage:FindFirstChild("StateReplicators")
+        local state = replicators and replicators:FindFirstChild("GameStateReplicator")
+        if not state or state:GetAttribute("GameOver") == true then return end
+
+        globals.Night4HardTimeScaleOverride = 1
+
+        if type(globals.ApplyTimeScaleOnce) == "function" then
+            pcall(globals.ApplyTimeScaleOnce)
+        end
+
+        while state.Parent and state:GetAttribute("GameOver") ~= true do
+            task.wait(0.25)
+        end
+
+        globals.Night4HardTimeScaleOverride = nil
+    end)
+end
+
 local Night4PuzzleScheduled = false
 
 local function StartNight4Puzzle()
@@ -325,6 +355,7 @@ end
 function Night.Run(mode, TDS)
     if mode == "Hard" then
         StartNight4Puzzle()
+        StartNight4HardTimeScale(TDS)
     end
     if mode == "Easy" then return RunNight4Easy(TDS) end
     if mode == "Hard" then return RunNight4Hard(TDS) end
