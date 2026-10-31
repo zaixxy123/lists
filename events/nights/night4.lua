@@ -4,10 +4,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Remote = ReplicatedStorage:WaitForChild("RemoteFunction")
 
 Night.Requirements = {
-    Easy = {"Trapper", "Hacker", "Gatling Gun", "Turret", "Mercenary Base"}
+    Easy = {"Trapper", "Hacker", "Gatling Gun", "Turret", "Mercenary Base"},
+    Hard = {"DJ Booth", "Hacker", "Gatling Gun", "Scout", "Ranger", "Mercenary Base"}
 }
 
-local function EquipNight4EasyLobbyLoadout()
+local function EquipNight4LobbyLoadout(mode)
     local stateReplicators = ReplicatedStorage:WaitForChild("StateReplicators", 10)
     if not stateReplicators then return false end
 
@@ -45,7 +46,7 @@ local function EquipNight4EasyLobbyLoadout()
     end
 
     task.wait(0.2)
-    for _, tower in ipairs(Night.Requirements.Easy) do
+    for _, tower in ipairs(mode == "Hard" and {"DJ Booth", "Hacker", "Gatling Gun", "Scout", "Ranger"} or Night.Requirements.Easy) do
         remoteEvent:FireServer("Inventory", "Equip", "Tower", tower)
         task.wait(0.3)
     end
@@ -54,15 +55,15 @@ local function EquipNight4EasyLobbyLoadout()
 end
 
 function Night.PrepareLobby(mode)
-    if mode == "Easy" then return EquipNight4EasyLobbyLoadout() end
+    if mode == "Easy" or mode == "Hard" then return EquipNight4LobbyLoadout(mode) end
     return false
 end
 
 function Night.Queue(mode)
-    if mode ~= "Easy" then return false end
+    if mode ~= "Easy" and mode ~= "Hard" then return false end
     local ok, result = pcall(function()
         return Remote:InvokeServer("Multiplayer", "v2:start", {
-            difficulty = "Act4Easy",
+            difficulty = mode == "Easy" and "Act4Easy" or "Act4",
             night = 4,
             count = 1,
             mode = "halloween2026"
@@ -71,8 +72,7 @@ function Night.Queue(mode)
     return ok and result ~= false
 end
 
-function Night.Run(mode, TDS)
-    if mode ~= "Easy" then return false end
+local function RunNight4Easy(TDS)
 
     TDS:Loadout("Trapper", "Hacker", "Gatling Gun", "Turret", "Mercenary Base")
     local manager = ReplicatedStorage:WaitForChild("Network"):WaitForChild("PlayerManager")
@@ -145,6 +145,155 @@ function Night.Run(mode, TDS)
     }, true)
 
     return true
+end
+
+local function RunNight4Hard(TDS)
+    TDS:Loadout("DJ Booth", "Hacker", "Gatling Gun", "Scout", "Ranger")
+
+    TDS:Place("Scout", 3.4058122634887695, 0.9999849200248718, -25.256784439086914)
+    TDS:Upgrade(1)
+    TDS:Upgrade(1)
+    TDS:Place("Scout", 6.430719375610352, 0.999983012676239, -24.958011627197266)
+    TDS:Upgrade(2)
+    TDS:Upgrade(2)
+    TDS:Place("Scout", 3.4058122634887695, 0.9999809861183167, -22.216785430908203)
+    TDS:Upgrade(3)
+    TDS:Upgrade(3)
+
+    task.wait(3)
+    TDS:Loadout("DJ Booth", "Hacker", "Gatling Gun", "Mercenary Base", "Ranger")
+
+    TDS:Ready()
+    TDS:Upgrade(3)
+    TDS:Upgrade(1)
+    TDS:Upgrade(2)
+
+    TDS:Place("Gatling Gun", -0.714411199092865, 1.060223937034607, -9.163329124450684)
+    TDS:Upgrade(4)
+    TDS:Upgrade(4)
+    TDS:Upgrade(4)
+    TDS:Upgrade(1)
+    TDS:Upgrade(3)
+    TDS:Upgrade(2)
+
+    TDS:Place("DJ Booth", -3.650881290435791, 1.0386496782302856, -13.166467666625977)
+    TDS:Upgrade(5)
+    TDS:Upgrade(5)
+    TDS:Upgrade(5)
+    TDS:SetOption(5, "Track", "Green")
+
+    TDS:Upgrade(4)
+    TDS:Place("Mercenary Base", -3.6786561012268066, 0.9999942779541016, 22.554428100585938)
+
+    TDS:Upgrade(6)
+    TDS:Upgrade(6)
+    TDS:Upgrade(6)
+    TDS:Upgrade(6)
+    TDS:SetOption(6, "Unit 1", "Riot Guard")
+    TDS:SetOption(6, "Unit 3", "Riot Guard")
+    TDS:SetOption(6, "Unit 2", "Riot Guard")
+
+    TDS:Upgrade(4)
+
+    TDS:Place("Mercenary Base", 3.4325942993164062, 0.9999982714653015, 22.87681770324707)
+
+    TDS:Upgrade(7)
+    TDS:Upgrade(7)
+    TDS:Upgrade(7)
+    TDS:Upgrade(7)
+    TDS:SetOption(7, "Unit 1", "Riot Guard")
+    TDS:SetOption(7, "Unit 2", "Riot Guard")
+    TDS:SetOption(7, "Unit 3", "Riot Guard")
+    TDS:Place("Mercenary Base", -8.193872451782227, 1.0609875917434692, -8.874517440795898)
+    TDS:Upgrade(8)
+    TDS:Upgrade(8)
+    TDS:Upgrade(8)
+    TDS:Upgrade(8)
+    TDS:SetOption(8, "Unit 1", "Riot Guard")
+    TDS:SetOption(8, "Unit 2", "Riot Guard")
+    TDS:SetOption(8, "Unit 3", "Riot Guard")
+    TDS:Upgrade(6)
+    TDS:Upgrade(7)
+
+    TDS:Upgrade(8)
+    TDS:Upgrade(4)
+
+    TDS:Upgrade(6)
+    TDS:Upgrade(7)
+    TDS:Upgrade(8)
+    TDS:Upgrade(5)
+    TDS:Upgrade(5)
+
+    TDS:SetOption(5, "Track", "Red")
+
+    TDS:Place("Ranger", -1.6879738569259644, 5.9212646484375, -1.9258742332458496)
+    TDS:Upgrade(9)
+    TDS:Upgrade(9)
+    TDS:Upgrade(9)
+    TDS:Upgrade(9)
+    TDS:Place("Ranger", -0.06645750999450684, 5.9212646484375, -4.484714508056641)
+    TDS:Upgrade(10)
+    TDS:Upgrade(10)
+    TDS:Upgrade(10)
+    TDS:Upgrade(10)
+
+    TDS:Place("Ranger", 1.860655665397644, 5.897640228271484, -2.0559463500976562)
+    TDS:Upgrade(11)
+    TDS:Upgrade(11)
+    TDS:Upgrade(11)
+    TDS:Upgrade(11)
+    TDS:Place("Ranger", 3.759669780731201, 5.9212646484375, -4.506083011627197)
+    TDS:Upgrade(12)
+    TDS:Upgrade(12)
+    TDS:Upgrade(12)
+    TDS:Upgrade(12)
+
+    TDS:Place("Ranger", -2.216064453125, 7.976963996887207, -6.634318828582764)
+    TDS:Upgrade(13)
+    TDS:Upgrade(13)
+    TDS:Upgrade(13)
+    TDS:Upgrade(13)
+    TDS:Place("Ranger", 0.3058032989501953, 7.976963996887207, -8.331900596618652)
+    TDS:Upgrade(14)
+    TDS:Upgrade(14)
+    TDS:Upgrade(14)
+    TDS:Upgrade(14)
+
+    TDS:Place("Ranger", 2.6439948081970215, 7.976964473724365, -6.389101982116699)
+    TDS:Upgrade(15)
+    TDS:Upgrade(15)
+    TDS:Upgrade(15)
+    TDS:Upgrade(15)
+    TDS:Place("Ranger", -19.006290435791016, 5.921395301818848, -12.544219970703125)
+    TDS:Upgrade(16)
+    TDS:Upgrade(16)
+    TDS:Upgrade(16)
+    TDS:Upgrade(16)
+
+    TDS:Place("Hacker", -3.7762348651885986, 0.9999892711639404, -25.750398635864258)
+    TDS:Upgrade(17)
+    TDS:Upgrade(17)
+    TDS:Upgrade(17)
+    TDS:Upgrade(17)
+    TDS:Upgrade(17, 2)
+
+    TDS:Place("Hacker", -9.145805358886719, 1.0000019073486328, -25.974485397338867)
+    TDS:Upgrade(18)
+    TDS:Upgrade(18)
+    TDS:Upgrade(18)
+    TDS:Upgrade(18)
+    TDS:Upgrade(18, 2)
+    TDS:Ability(18, "Hologram Tower", {towerPosition = Vector3.new(-3.7215161323547363, 1.0463122129440308, -5.009292125701904), towerToClone = 4}, true)
+    TDS:Ability(17, "Hologram Tower", {towerPosition = Vector3.new(-4.2561936378479, 1.0377670526504517, 17.729827880859375), towerToClone = 6}, true)
+    TDS:Ability(17, "Hologram Tower", {towerPosition = Vector3.new(5.1540374755859375, 1.0377665758132935, 16.96487808227539), towerToClone = 7}, true)
+
+    return true
+end
+
+function Night.Run(mode, TDS)
+    if mode == "Easy" then return RunNight4Easy(TDS) end
+    if mode == "Hard" then return RunNight4Hard(TDS) end
+    return false
 end
 
 return Night
