@@ -189,7 +189,14 @@ return {
                 {MinLevel = 50, MaxLevel = 174, Route = "Molten", FarmBehavior = "RepeatUntilAffordable"} 
             } 
         }, 
-        ["Medic"] = {Type = "Currency", Currency = "Coins", Price = 2000}, 
+        ["Medic"] = {
+            Type = "Currency",
+            Currency = "Coins",
+            Price = 2000,
+            GrindRules = {
+                {ProgressionMode = "AutoMax", MinLevel = 175, Route = "Fallen.Starter", FarmBehavior = "RepeatUntilAffordable"},
+            }
+        }, 
         ["Assassin"] = { 
             Type = "Currency", 
             Currency = "Coins", 
