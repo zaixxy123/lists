@@ -55,7 +55,8 @@ local function EquipNight4LobbyLoadout(mode)
 end
 
 function Night.PrepareLobby(mode)
-    if mode == "Easy" or mode == "Hard" then return EquipNight4LobbyLoadout(mode) end
+    if mode == "Hard" then return true end
+    if mode == "Easy" then return EquipNight4LobbyLoadout(mode) end
     return false
 end
 
