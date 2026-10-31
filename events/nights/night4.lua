@@ -142,7 +142,7 @@ function Night.Run(mode, TDS)
     TDS:Ability(10, "Hologram", {
         towerToClone = 3,
         towerPosition = Vector3.new(1.70491170883178711, 5.92126464843750000, -3.417245626449584964)
-    })
+    }, true)
 
     return true
 end
