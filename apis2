@@ -2273,42 +2273,64 @@ function TDS:Sell(index)
     )
 end
 
-function TDS:UnlockTimeScale()
+function TDS:UnlockTimeScale(targetSpeed)
     local playerGui = plr:FindFirstChild("PlayerGui")
     local hotbar = playerGui and playerGui:FindFirstChild("ReactUniversalHotbar")
     local frame = hotbar and hotbar:FindFirstChild("Frame")
     local timescale = frame and frame:FindFirstChild("timescale")
-    local tickets = plr:FindFirstChild("TimescaleTickets")
 
-    if not timescale or not tickets or tickets.Value < 1 then
+    if not timescale or not timescale.Visible then
         return false
     end
 
     local lock = timescale:FindFirstChild("Lock")
-    if not lock or not lock.Visible then
-        return true
+
+    if lock and lock.Visible then
+        local tickets = plr:FindFirstChild("TimescaleTickets")
+
+        if not tickets or tickets.Value < 1 then
+            return false
+        end
+
+        local ok, result = pcall(function()
+            return rf:InvokeServer("TicketsManager", "UnlockTimeScale")
+        end)
+
+        if not ok or result == false then
+            return false
+        end
+
+        local deadline = os.clock() + 6
+
+        while lock.Parent and lock.Visible and os.clock() < deadline do
+            task.wait(0.1)
+        end
+
+        if lock.Parent and lock.Visible then
+            return false
+        end
     end
 
-    local ok, result = pcall(function()
-        return rf:InvokeServer("TicketsManager", "UnlockTimeScale")
-    end)
+    if targetSpeed ~= nil then
+        return self:TimeScale(targetSpeed)
+    end
 
-    return ok and result ~= false
+    return true
 end
 
 function TDS:TimeScale(val)
-    local speeds = {0, 0.5, 1, 1.5, 2}
     local target = tonumber(val)
-    local targetIndex
+    local validSpeeds = {0, 0.5, 1, 1.5, 2}
+    local valid = false
 
-    for i, speed in ipairs(speeds) do
+    for _, speed in ipairs(validSpeeds) do
         if speed == target then
-            targetIndex = i
+            valid = true
             break
         end
     end
 
-    if not targetIndex then
+    if not valid then
         return false
     end
 
@@ -2317,23 +2339,37 @@ function TDS:TimeScale(val)
     local frame = hotbar and hotbar:FindFirstChild("Frame")
     local timescale = frame and frame:FindFirstChild("timescale")
     local speedLabel = timescale and timescale:FindFirstChild("Speed")
-    local current = speedLabel and tonumber(speedLabel.Text:match("x([%d%.]+)"))
-    local currentIndex
 
-    for i, speed in ipairs(speeds) do
-        if speed == current then
-            currentIndex = i
-            break
-        end
-    end
-
-    if not currentIndex then
+    if not timescale or not timescale.Visible or not speedLabel then
         return false
     end
 
-    local cycles = (targetIndex - currentIndex) % #speeds
+    local lock = timescale:FindFirstChild("Lock")
+    local unlockDeadline = os.clock() + 6
 
-    for _ = 1, cycles do
+    while lock and lock.Parent and lock.Visible and os.clock() < unlockDeadline do
+        task.wait(0.1)
+    end
+
+    if lock and lock.Parent and lock.Visible then
+        return false
+    end
+
+    local function currentSpeed()
+        return tonumber(tostring(speedLabel.Text):match("x%s*([%d%.]+)"))
+    end
+
+    for _ = 1, #validSpeeds do
+        local before = currentSpeed()
+
+        if before == target then
+            return true
+        end
+
+        if before == nil then
+            return false
+        end
+
         local ok, result = pcall(function()
             return rf:InvokeServer("TicketsManager", "CycleTimeScale")
         end)
@@ -2342,10 +2378,26 @@ function TDS:TimeScale(val)
             return false
         end
 
-        task.wait(0.5)
+        local deadline = os.clock() + 3
+        local after = currentSpeed()
+
+        while (after == nil or after == before) and os.clock() < deadline do
+            task.wait(0.05)
+            after = currentSpeed()
+        end
+
+        if after == nil or after == before then
+            return false
+        end
+
+        task.wait(0.2)
+
+        if currentSpeed() == target then
+            return true
+        end
     end
 
-    return true
+    return currentSpeed() == target
 end
 
 function TDS:WaitForWave(wave)
