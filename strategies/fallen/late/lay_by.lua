@@ -18,7 +18,6 @@ TDS:GameInfo("Lay By", {
     "Committed",
     "Quarantine",
     "Fog",
-    "Glass",
     "SpeedyEnemies"
 })
 
