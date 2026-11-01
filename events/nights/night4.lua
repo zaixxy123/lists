@@ -71,7 +71,9 @@ function Night.Queue(mode)
         })
     end)
     return ok and result ~= false
-enlocal function RunNight4Easy(TDS)
+end
+
+local function RunNight4Easy(TDS)
     TDS:Loadout("DJ Booth", "Gatling Gun", "Mercenary Base", "Hacker", "Assassin")
 
     local manager = ReplicatedStorage:WaitForChild("Network"):WaitForChild("PlayerManager")
