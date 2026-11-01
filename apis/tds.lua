@@ -867,6 +867,81 @@ return function(Context)
         )
     end
 
+    function TDS:UnlockTimeScale()
+        local playerGui = plr:FindFirstChild("PlayerGui")
+        local hotbar = playerGui and playerGui:FindFirstChild("ReactUniversalHotbar")
+        local frame = hotbar and hotbar:FindFirstChild("Frame")
+        local timescale = frame and frame:FindFirstChild("timescale")
+        local tickets = plr:FindFirstChild("TimescaleTickets")
+
+        if not timescale or not tickets or tickets.Value < 1 then
+            return false
+        end
+
+        local lock = timescale:FindFirstChild("Lock")
+        if not lock or not lock.Visible then
+            return true
+        end
+
+        local ok, result = pcall(function()
+            return rf:InvokeServer("TicketsManager", "UnlockTimeScale")
+        end)
+
+        return ok and result ~= false
+    end
+
+    function TDS:TimeScale(val)
+        local speeds = {0, 0.5, 1, 1.5, 2}
+        local target = tonumber(val)
+        local targetIndex
+
+        for i, speed in ipairs(speeds) do
+            if speed == target then
+                targetIndex = i
+                break
+            end
+        end
+
+        if not targetIndex then
+            return false
+        end
+
+        local playerGui = plr:FindFirstChild("PlayerGui")
+        local hotbar = playerGui and playerGui:FindFirstChild("ReactUniversalHotbar")
+        local frame = hotbar and hotbar:FindFirstChild("Frame")
+        local timescale = frame and frame:FindFirstChild("timescale")
+        local speedLabel = timescale and timescale:FindFirstChild("Speed")
+        local current = speedLabel and tonumber(speedLabel.Text:match("x([%d%.]+)"))
+        local currentIndex
+
+        for i, speed in ipairs(speeds) do
+            if speed == current then
+                currentIndex = i
+                break
+            end
+        end
+
+        if not currentIndex then
+            return false
+        end
+
+        local cycles = (targetIndex - currentIndex) % #speeds
+
+        for _ = 1, cycles do
+            local ok, result = pcall(function()
+                return rf:InvokeServer("TicketsManager", "CycleTimeScale")
+            end)
+
+            if not ok or result == false then
+                return false
+            end
+
+            task.wait(0.5)
+        end
+
+        return true
+    end
+
     function TDS:WaitForWave(wave)
         return DirectWaitForWave(
             tonumber(wave) or 0
