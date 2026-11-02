@@ -1,6 +1,6 @@
 TDS:Loadout("Hacker", "Gatling Gun", "Militant", "Mercenary Base", "DJ Booth")
 TDS:Mode("Trial")
-
+TDS:VoteSkip(7,8)
 TDS:Place("Militant", -8.568724632263184, 0.400004506111145, -14.020751953125)
 TDS:Ready()
 TDS:Upgrade(1)
@@ -10,9 +10,6 @@ TDS:Place("Militant", -11.495475769042969, 0.40000441670417786, -13.283121109008
 TDS:Upgrade(3)
 TDS:Place("Militant", -10.564520835876465, 0.40000665187835693, -16.313037872314453)
 TDS:Upgrade(4)
-
-TDS:VoteSkip(7)
-TDS:VoteSkip(8)
 TDS:WaitForWave(9)
 TDS:Sell(2)
 TDS:Sell(4)
