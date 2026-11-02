@@ -1,6 +1,6 @@
 TDS:Loadout("Gatling Gun", "Hacker", "Mercenary Base", "Trapper", "DJ Booth")
 TDS:Mode("Trial")
-
+TDS:VoteSkip(6,7)
 TDS:Place("Trapper", -22.46595001220703, 1.0249874591827393, -11.294063568115234)
 TDS:Ready()
 
@@ -9,11 +9,7 @@ TDS:Upgrade(1)
 TDS:Place("Trapper", -21.672149658203125, 1.0249871015548706, -17.349863052368164)
 
 TDS:Upgrade(2)
-
-TDS:VoteSkip(6)
-
 TDS:WaitForWave(7)
-TDS:VoteSkip(7)
 TDS:Sell(1)
 TDS:Place("Gatling Gun", 18.812278747558594, 6.367428779602051, -10.768521308898926)
 
