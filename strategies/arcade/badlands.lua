@@ -1,4 +1,5 @@
 TDS:Loadout("Trapper", "Gatling Gun", "Mercenary Base", "Medic", "Hacker")
+TDS:VoteSkip(30)
 TDS:MedicChain(3,"Hologram")
 TDS:Place("Trapper", 0.55474036931991577, 1.00000226497650146, 7.82412052154541016)
 TDS:Ready()
