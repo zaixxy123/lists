@@ -138,7 +138,7 @@ local function StartNight4TimeScale(tds, state, session)
     end)
 end
 
-local function StartGatlify(state, session)
+local function StartAutoGatling(state, session)
     task.spawn(function()
         while IsActive(session) and state.Parent
             and state:GetAttribute("GameStarted") ~= true
@@ -164,7 +164,8 @@ local function RunNight(tds, state, night, session)
     end
 
     Status("Running Night " .. night .. " Hard")
-    StartGatlify(state, session)
+    Globals.SolarRequiemCurrentNight = night
+    StartAutoGatling(state, session)
 
     if night == 4 then
         StartPuzzle(state, session)
@@ -282,6 +283,7 @@ local function Watch(tds, session, context)
 
     if Session == session then
         Running = false
+        Globals.SolarRequiemCurrentNight = nil
         Globals.Night4HardTimeScaleOverride = nil
     end
 end
@@ -301,6 +303,7 @@ function Solar.Start(tds, context)
     ActiveContext = type(context) == "table" and context or ActiveContext
 
     if game.PlaceId == LOBBY_PLACE_ID then
+        Globals.SolarRequiemCurrentNight = nil
         if LobbyQueued then return true end
         if ActiveContext and type(ActiveContext.GetMissingTowers) == "function" then
             local ok, missing = pcall(ActiveContext.GetMissingTowers, RequiredTowers)
@@ -357,6 +360,7 @@ function Solar.Stop()
     Running = false
     LobbyQueued = false
     ActiveContext = nil
+    Globals.SolarRequiemCurrentNight = nil
     Globals.Night4HardTimeScaleOverride = nil
     return true
 end
