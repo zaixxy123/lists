@@ -79,7 +79,7 @@ return {
                 Hidden = "strategies/currency/premium/timescale_ticket/hidden.lua",
                 Quarantine = "strategies/hologram/quarantine.lua",
                 Fog = "strategies/currency/premium/timescale_ticket/fog.lua",
-                Limitation = "strategies/currency/premium/timescale_ticket/limitation.lua"
+                Limitation = "strategies/currency/premium/timescale_ticket/limitation.lua",
                 Speedies = "strategies/currency/premium/timescale_ticket/speedy.lua"
             },
 
