@@ -70,7 +70,8 @@ return {
                 Fog = "Fog",
                 Hidde = "HiddenEnemie",
                 Limitatio = "Limitatio",
-                Quarantine = "Quarantine"
+                Quarantine = "Quarantine",
+                Speedies = "SpeedyEnemies"
             },
 
             Strategies = {
@@ -79,6 +80,7 @@ return {
                 Quarantine = "strategies/hologram/quarantine.lua",
                 Fog = "strategies/currency/premium/timescale_ticket/fog.lua",
                 Limitation = "strategies/currency/premium/timescale_ticket/limitation.lua"
+                Speedies = "strategies/currency/premium/timescale_ticket/speedy.lua"
             },
 
             Rotation = {
