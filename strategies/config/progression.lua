@@ -21,7 +21,7 @@ return {
                     TargetLevel = 15
                 },
                 {
-                    MinLevel = 15,
+                    MinLevel = 15,https://avatars.githubusercontent.com/u/311672102?v=4&size=64
                     MaxLevel = 49,
                     Route = "Molten",
                     TargetLevel = 50
@@ -71,7 +71,7 @@ return {
             },
 
             SupportedTrials = {
-                Explodin = "ExplodingEnemie",
+                Exploding = "ExplodingEnemies",
                 Fog = "Fog",
                 Hidden = "HiddenEnemies",
                 Limitation = "Limitation",
@@ -80,7 +80,7 @@ return {
             },
 
             Strategies = {
-                Exploding = "strategies/currency/premium/timescale_ticket/exploding.lua",
+                Exploding = "strategies/hologram/exploding.lua",
                 Hidden = "strategies/currency/premium/timescale_ticket/hidden.lua",
                 Quarantine = "strategies/hologram/quarantine.lua",
                 Fog = "strategies/currency/premium/timescale_ticket/fog.lua",
