@@ -62,7 +62,12 @@ return {
             TrialCurrency = "Timescale Ticket",
 
             RequiredTowers = {
-                "Gatling Gun"
+                "Trapper",
+                "Mercenary Base",
+                "Gatling Gun",
+                "Medic",
+                "Hacker",
+                "DJ Booth"
             },
 
             SupportedTrials = {
