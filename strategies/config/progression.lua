@@ -71,7 +71,7 @@ return {
                 Hidde = "HiddenEnemie",
                 Limitatio = "Limitatio",
                 Quarantine = "Quarantine",
-                Speedies = "SpeedyEnemies"
+                Speedie = "SpeedyEnemie"
             },
 
             Strategies = {
