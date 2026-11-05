@@ -74,7 +74,7 @@ return {
                 Explodin = "ExplodingEnemie",
                 Fog = "Fog",
                 Hidden = "HiddenEnemies",
-                Limitatio = "Limitatio",
+                Limitation = "Limitation",
                 Quarantine = "Quarantine",
                 Speedie = "SpeedyEnemie"
             },
