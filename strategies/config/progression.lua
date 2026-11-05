@@ -68,7 +68,7 @@ return {
             SupportedTrials = {
                 Explodin = "ExplodingEnemie",
                 Fog = "Fog",
-                Hidde = "HiddenEnemie",
+                Hidden = "HiddenEnemies",
                 Limitatio = "Limitatio",
                 Quarantine = "Quarantine",
                 Speedie = "SpeedyEnemie"
