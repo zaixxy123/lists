@@ -21,7 +21,7 @@ return {
                     TargetLevel = 15
                 },
                 {
-                    MinLevel = 15,https://avatars.githubusercontent.com/u/311672102?v=4&size=64
+                    MinLevel = 15,
                     MaxLevel = 49,
                     Route = "Molten",
                     TargetLevel = 50
