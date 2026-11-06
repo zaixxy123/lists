@@ -1,0 +1,85 @@
+TDS:Loadout("Trapper", "Gatling Gun", "DJ Booth", "Hacker", "Mercenary Base")
+TDS:Mode("Trial")
+TDS:VoteSkip(6,7)
+
+TDS:Place("Trapper", -16.08155441284179688, 0.99996191263198853, 0.84526038169860840, true)
+TDS:Ready()
+TDS:Upgrade(1)
+
+TDS:Place("Trapper", -16.08155441284179688, 0.99996191263198853, 0.84526038169860840, true)
+TDS:Upgrade(2)
+
+TDS:WaitForWave(7)
+TDS:Sell(1)
+TDS:Place("Gatling Gun", 18.812278747558594, 6.367428779602051, -10.768521308898926, true)
+TDS:Upgrade(3)
+TDS:Upgrade(3)
+TDS:Upgrade(3)
+
+TDS:Place("DJ Booth", 18.812278747558594, 6.367428779602051, -10.768521308898926, true)
+TDS:Upgrade(4)
+TDS:Upgrade(4)
+TDS:SetOption(4, "Track", "Green")
+TDS:Upgrade(4)
+
+TDS:Place("Hacker", 0.09961795806884766, 0.999941349029541, 30.211772918701172)
+TDS:Upgrade(5)
+TDS:Upgrade(5)
+
+TDS:Upgrade(3)
+TDS:Upgrade(3)
+TDS:Upgrade(2)
+TDS:Upgrade(3)
+
+TDS:Place("Mercenary Base", -2.5370631217956543, 0.9999910593032837, -40.826210021972656)
+TDS:Upgrade(6)
+TDS:Upgrade(6)
+TDS:Upgrade(6)
+TDS:Upgrade(6)
+TDS:SetOption(6, "Unit 1", "Riot Guard")
+TDS:SetOption(6, "Unit 2", "Riot Guard")
+TDS:SetOption(6, "Unit 3", "Riot Guard")
+TDS:Upgrade(6)
+TDS:Upgrade(6)
+
+TDS:Upgrade(4)
+TDS:SetOption(4, "Track", "Red")
+TDS:Upgrade(4)
+
+TDS:Place("Mercenary Base", -0.44461488723754883, 0.9999866485595703, -34.47880172729492)
+TDS:Upgrade(7)
+TDS:Upgrade(7)
+TDS:Upgrade(7)
+TDS:Upgrade(7)
+TDS:SetOption(7, "Unit 1", "Riot Guard")
+TDS:SetOption(7, "Unit 2", "Riot Guard")
+TDS:SetOption(7, "Unit 3", "Riot Guard")
+TDS:Upgrade(7)
+TDS:Upgrade(7)
+
+TDS:Place("Mercenary Base", 3.3399558067321777, 0.999991774559021, -41.80641174316406)
+TDS:Upgrade(8)
+TDS:Upgrade(8)
+TDS:Upgrade(8)
+TDS:Upgrade(8)
+TDS:SetOption(8, "Unit 1", "Riot Guard")
+TDS:SetOption(8, "Unit 2", "Riot Guard")
+TDS:SetOption(8, "Unit 3", "Riot Guard")
+TDS:Upgrade(8)
+TDS:Upgrade(8)
+
+TDS:Upgrade(5)
+TDS:Upgrade(5)
+TDS:Upgrade(5, 2)
+
+TDS:Place("Hacker", 11.618265151977539, 0.9999482035636902, 20.447988510131836)
+TDS:Upgrade(9)
+TDS:Upgrade(9)
+TDS:Upgrade(9)
+TDS:Upgrade(9)
+TDS:Upgrade(9, 2)
+
+TDS:Ability(5, "Hologram Tower", {
+    towerPosition = Vector3.new(-2.478036880493164, 6.36240816116333, -25.37445068359375),
+    towerToClone = 3
+}, true)
