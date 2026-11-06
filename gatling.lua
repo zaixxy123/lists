@@ -32,8 +32,8 @@ local defaultConfig = {
 	umbraAimLegs = true, -- Aim at Umbra's legs / skirt to avoid bow obstruction and upper-body animation sway
 	autoCaliber = true,
 	smartTargeting = true,
-	maxTargets = 5,
-	maxTarget = 5,
+	maxTargets = 3,
+	maxTarget = 3,
 	mode = "First",
 	dynamicMultiplier = true,
 	dynamicFireRate = true,
@@ -129,7 +129,7 @@ for k, v in pairs(defaultConfig) do
 	end
 end
 
-local DAMAGE_VALUES = { [0] = 5, [1] = 8, [2] = 12, [3] = 16, [4] = 25, [5] = 45, [6] = 85 }
+local DAMAGE_VALUES = { [0] = 5, [1] = 8, [2] = 12, [3] = 13, [4] = 20, [5] = 36, [6] = 67 }
 
 local THEME = {
 	Bg = Color3.fromRGB(12, 12, 18),
@@ -496,7 +496,37 @@ end
 
 local TargetVisualPartCache = setmetatable({}, { __mode = "k" })
 
+local function GetVoidEyeAimPart(model)
+	if not model or not model.Parent then return nil end
+	local name = string.lower(model.Name):gsub("[^%w]", "")
+	if not string.find(name, "voideye", 1, true) then return nil end
+	-- Server damage tests register at the root, not the floating visual hitbox.
+	local root = model:FindFirstChild("RootPart") or model:FindFirstChild("HumanoidRootPart")
+	if root and root:IsA("BasePart") then return root end
+	return nil
+end
+
+local function GetSwordmasterLegPosition(model)
+	if not model or not model.Parent then return nil end
+	local name = string.lower(model.Name):gsub("[^%w]", "")
+	if not string.find(name, "voidswordmaster", 1, true) then return nil end
+	local right = model:FindFirstChild("DEF_Leg_r", true)
+	local left = model:FindFirstChild("DEF_Leg_l", true)
+	if right and right:IsA("Bone") and left and left:IsA("Bone") then
+		return (right.WorldPosition + left.WorldPosition) * 0.5
+	elseif right and right:IsA("Bone") then
+		return right.WorldPosition
+	elseif left and left:IsA("Bone") then
+		return left.WorldPosition
+	end
+	return nil
+end
+
 local function GetTargetVisualPosition(model, defaultPos)
+	local eyeRoot = GetVoidEyeAimPart(model)
+	if eyeRoot then return eyeRoot.Position end
+	local swordmasterLegPos = GetSwordmasterLegPosition(model)
+	if swordmasterLegPos then return swordmasterLegPos end
 	if not model or not model.Parent then
 		return defaultPos
 	end
@@ -977,6 +1007,8 @@ local function GetUmbraAimPart(model)
 end
 
 local function FindTargetPart(model, npcData)
+	local eyeRoot = GetVoidEyeAimPart(model)
+	if eyeRoot then return eyeRoot end
 	if not model then
 		return nil
 	end
@@ -1053,18 +1085,10 @@ local CRYSTAL_TARGET_KEYWORDS = {
 
 local SPECIAL_TARGET_KEYWORDS = {
 	"summon",
-	"eye",
-	"void eye",
-	"voideye",
-	"void portal",
-	"voidportal",
-	"portal",
 }
 
 local PORTAL_TARGET_KEYWORDS = {
-	"void portal",
-	"voidportal",
-	"portal",
+	-- Void portals are ignored, never promoted as priority targets.
 }
 
 local function HasKeyword(value, keywords)
@@ -1258,6 +1282,30 @@ local function IsSpecialSpawnTarget(model, rep)
 	return false
 end
 
+local function IsIgnoredVoidPortalTarget(model, rep, npcData)
+	local function matches(value)
+		if type(value) ~= "string" then
+			return false
+		end
+		local name = string.lower(value):gsub("[^%w]", ""):gsub("enemy$", "")
+		return name == "voidportal"
+	end
+	if npcData and matches(npcData.Name) then
+		return true
+	end
+	for _, source in pairs({ model = model, replicator = rep }) do
+		if matches(source.Name) then
+			return true
+		end
+		for _, key in ipairs({ "DisplayName", "Name", "Type", "Class", "UnitType", "ModelName" }) do
+			if matches(source:GetAttribute(key)) then
+				return true
+			end
+		end
+	end
+	return false
+end
+
 local function IsEyeTarget(model, rep)
 	if IsTricksterTarget(model, rep) or IsUmbraTarget(model, rep) then
 		return false
@@ -1410,6 +1458,18 @@ local function HasCorpseKeyword(value)
 end
 
 local function IsCorpseTarget(model, rep)
+	-- Void Keeper uses the internal name Void Grave Digger; it is not a corpse.
+	local function isKeeperName(value)
+		if type(value) ~= "string" then return false end
+		local name = string.lower(value):gsub("[^%w]", ""):gsub("enemy$", "")
+		return name == "voidkeeper" or name == "voidgravedigger"
+	end
+	for _, source in pairs({ model = model, replicator = rep }) do
+		if isKeeperName(source.Name) then return false end
+		for _, key in ipairs({ "DisplayName", "Name", "ModelName" }) do
+			if isKeeperName(source:GetAttribute(key)) then return false end
+		end
+	end
 	if IsHologramEnemy(model, rep) or IsTricksterTarget(model, rep) or IsUmbraTarget(model, rep) then
 		return false
 	end
@@ -3148,6 +3208,10 @@ local function GetRawEnemyCandidates()
 		local isCorpseTarget = IsCorpseTarget(targetModel, resolvedRep)
 		local isEyeTarget = IsEyeTarget(targetModel, resolvedRep)
 		local npcName = npcData and npcData.Name
+		-- Void Portal remains excluded; Void Eye is eligible in v2.
+		if IsIgnoredVoidPortalTarget(targetModel, resolvedRep, npcData) then
+			return
+		end
 		if (not isUmbraTarget) and npcName and string.find(string.lower(npcName), "umbra", 1, true) ~= nil then
 			isUmbraTarget = true
 		end
@@ -3372,6 +3436,17 @@ local function GetSortedTargets(activeTower)
 		if not model or not model.Parent or not model:IsDescendantOf(workspace) then
 			continue
 		end
+		if IsIgnoredVoidPortalTarget(model, raw.Replicator, raw.NPC) then
+			continue
+		end
+		if raw.IsEye and activeTower and raw.Replicator then
+			local towerRep = activeTower:FindFirstChild("TowerReplicator")
+			local ownTeam = towerRep and towerRep:GetAttribute("Team")
+			local eyeTeam = raw.Replicator:GetAttribute("Team")
+			if ownTeam ~= nil and eyeTeam ~= nil and tostring(ownTeam) == tostring(eyeTeam) then
+				continue
+			end
+		end
 		if IsTargetDead(model, raw.Replicator, raw.NPC) then
 			continue
 		end
@@ -3409,6 +3484,16 @@ local function GetSortedTargets(activeTower)
 		})
 	end
 
+	-- Void Eyes are fallback targets only when no other valid enemy remains.
+	local regularTargets, eyeTargets = {}, {}
+	for _, candidate in ipairs(candidates) do
+		if candidate.IsEye then
+			table.insert(eyeTargets, candidate)
+		else
+			table.insert(regularTargets, candidate)
+		end
+	end
+	candidates = #regularTargets > 0 and regularTargets or eyeTargets
 	if #candidates > 0 then
 		local hasUmbra = false
 		if cfg.umbraPriority ~= false then
@@ -3492,8 +3577,10 @@ local function GetSortedTargets(activeTower)
 				if cfg.corpsePriority ~= false and a.IsCorpse ~= b.IsCorpse then
 					return a.IsCorpse == true
 				end
-				if cfg.specialTargetPriority ~= false and a.IsSpecial ~= b.IsSpecial then
-					return a.IsSpecial == true
+				local aSpecial = a.IsSpecial
+				local bSpecial = b.IsSpecial
+				if cfg.specialTargetPriority ~= false and aSpecial ~= bSpecial then
+					return aSpecial == true
 				end
 				if cfg.prioritizeDamagable == true then
 					local aCanDamage = not (a.IsLead and not (cfg and cfg.shootLead == true))
@@ -3539,8 +3626,10 @@ local function GetSortedTargets(activeTower)
 				if cfg.corpsePriority ~= false and a.IsCorpse ~= b.IsCorpse then
 					return a.IsCorpse == true
 				end
-				if cfg.specialTargetPriority ~= false and a.IsSpecial ~= b.IsSpecial then
-					return a.IsSpecial == true
+				local aSpecial = a.IsSpecial
+				local bSpecial = b.IsSpecial
+				if cfg.specialTargetPriority ~= false and aSpecial ~= bSpecial then
+					return aSpecial == true
 				end
 				if cfg.prioritizeDamagable == true then
 					local aCanDamage = not (a.IsLead and not (cfg and cfg.shootLead == true))
@@ -3574,8 +3663,10 @@ local function GetSortedTargets(activeTower)
 				if cfg.corpsePriority ~= false and a.IsCorpse ~= b.IsCorpse then
 					return a.IsCorpse == true
 				end
-				if cfg.specialTargetPriority ~= false and a.IsSpecial ~= b.IsSpecial then
-					return a.IsSpecial == true
+				local aSpecial = a.IsSpecial
+				local bSpecial = b.IsSpecial
+				if cfg.specialTargetPriority ~= false and aSpecial ~= bSpecial then
+					return aSpecial == true
 				end
 				if cfg.prioritizeDamagable == true then
 					local aCanDamage = not (a.IsLead and not (cfg and cfg.shootLead == true))
@@ -3763,6 +3854,10 @@ local function GetLegsPosition(model)
 end
 
 local function GetTargetPosition(hrp, model)
+	local eyeRoot = GetVoidEyeAimPart(model)
+	if eyeRoot then return eyeRoot.Position end
+	local swordmasterLegPos = GetSwordmasterLegPosition(model)
+	if swordmasterLegPos then return swordmasterLegPos end
 	if model then
 		local mName = string.lower(model.Name)
 		if string.find(mName, "umbra", 1, true) then
@@ -3913,6 +4008,10 @@ local function ModelHasShield(model)
 end
 
 local function GetDirectRaycastPosition(origin, targetModel, fallbackPos, activeTower)
+	local eyeRoot = GetVoidEyeAimPart(targetModel)
+	if eyeRoot then return eyeRoot.Position end
+	local swordmasterLegPos = GetSwordmasterLegPosition(targetModel)
+	if swordmasterLegPos then return swordmasterLegPos end
 	if not targetModel or not targetModel.Parent then
 		return fallbackPos
 	end
@@ -4090,6 +4189,10 @@ local function GetDirectRaycastPosition(origin, targetModel, fallbackPos, active
 end
 
 local function ComputeAdaptiveFirePosition(cfg, shotPatternCounter, towerPos, targetData, targetModel, targetCenterPos, Replicator)
+	local eyeRoot = GetVoidEyeAimPart(targetModel)
+	if eyeRoot then return eyeRoot.Position, shotPatternCounter end
+	local swordmasterLegPos = GetSwordmasterLegPosition(targetModel)
+	if swordmasterLegPos then return swordmasterLegPos, shotPatternCounter end
 	local aimPos, targetSpeed, aimVelocity, aimDist, closeFactor =
 		GetLiveAimPosition(targetData, towerPos, Replicator)
 	if not aimPos then
@@ -4427,7 +4530,7 @@ getgenv().StartHooks = function(Tower)
 								if t.IsTrickster then
 									hasTrickster = true
 								end
-								if t.IsVoidPortal then
+								if t.IsVoidPortal or t.IsEye then
 									hasVoidPortal = true
 								end
 							end
@@ -4469,7 +4572,7 @@ getgenv().StartHooks = function(Tower)
 								local lockIsUmbra = IsUmbraTarget(lockState.model, lockRep)
 								local lockIsTrickster = IsTricksterTarget(lockState.model, lockRep)
 								local lockIsPortal = IsVoidPortalTarget(lockState.model, lockRep) or IsEyeTarget(lockState.model, lockRep)
-								if IsTargetDead(lockState.model, lockRep)
+								if IsIgnoredVoidPortalTarget(lockState.model, lockRep) or IsTargetDead(lockState.model, lockRep)
 									or (IsEnemyLead(lockRep, lockState.model) and not (cfg and cfg.shootLead == true))
 									or (cfg.umbraPriority ~= false and hasUmbra and not lockIsUmbra)
 									or (cfg.tricksterPriority ~= false and hasTrickster and not lockIsTrickster and not lockIsUmbra)
@@ -4756,6 +4859,12 @@ getgenv().StartHooks = function(Tower)
 											firePos = rayFirePos
 										end
 
+										-- Recheck after any target replacement and before aim/fire.
+										if IsIgnoredVoidPortalTarget(targetModel, targetData.Replicator, targetData.NPC) then
+											lockState.model = nil
+											lockState.untilTick = 0
+											break
+										end
 										transport:Aim(firePos)
 										pcall(function()
 											if gganim and type(gganim._aim) == "function" then
@@ -4766,7 +4875,7 @@ getgenv().StartHooks = function(Tower)
 										-- Penetration extension: extend bullet through target along ray vector to guarantee server hit registration
 										local toTarget = firePos - shotOrigin
 										local serverFirePos = firePos
-										if toTarget.Magnitude > 0.5 then
+										if toTarget.Magnitude > 0.5 and not GetSwordmasterLegPosition(targetModel) and not GetVoidEyeAimPart(targetModel) then
 											local extendDist = isUmbra and 35 or 15
 											serverFirePos = firePos + (toTarget.Unit * extendDist)
 										end
