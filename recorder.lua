@@ -21,42 +21,6 @@ return function(ctx)
     local last_wave = 0
     local Recorder
     local has_hook = type(hookmetamethod) == "function"
-    local current_record_file = nil
-    local RECORD_FOLDER = "AutoStrategy"
-    local LOBBY_PLACE_ID = 3260590327
-
-    local function sanitize_mode_name(mode_name)
-        mode_name = tostring(mode_name or "Unknown")
-        mode_name = mode_name:gsub("[%c%p%s]+", "")
-        if mode_name == "" then
-            mode_name = "Unknown"
-        end
-        return mode_name
-    end
-
-    local function get_next_record_file(mode_name)
-        if makefolder and isfolder and not isfolder(RECORD_FOLDER) then
-            pcall(makefolder, RECORD_FOLDER)
-        end
-
-        local base = sanitize_mode_name(mode_name)
-        local index = 1
-
-        while true do
-            local path = string.format(
-                "%s/%s_%02d.txt",
-                RECORD_FOLDER,
-                base,
-                index
-            )
-
-            if not isfile or not isfile(path) then
-                return path
-            end
-
-            index += 1
-        end
-    end
     
     local function get_wave_prefix()
         local success, current_wave = pcall(function() return replicated_storage.StateReplicators.GameStateReplicator:GetAttribute("Wave") end)
@@ -69,11 +33,8 @@ return function(ctx)
 
     local function record_action(command_str)
         if not Globals.record_strat then return end
-        if appendfile and current_record_file then
-            appendfile(
-                current_record_file,
-                get_wave_prefix() .. command_str .. "\n"
-            )
+        if appendfile then
+            appendfile("Strat.txt", get_wave_prefix() .. command_str .. "\n")
         end
     end
 
@@ -697,84 +658,17 @@ return function(ctx)
         end
     end
 
-    local RecorderTab =
-        ctx.Tab
-        or Window:Tab({
-            Title = "Recorder",
-            Icon = "camera"
+    local RecorderTab = Window:Tab({Title = "Recorder", Icon = "camera"}) do
+        Recorder = RecorderTab:CreateLogger({
+            Title = "RECORDER:",
+            Size = UDim2.new(0, 625, 0, 260)
         })
-
-    do
-        if RecorderTab.SetStatus then
-            RecorderTab:SetStatus(
-                (game.PlaceId == LOBBY_PLACE_ID or game_state == "LOBBY")
-                and "Recorder only works in-game."
-                or "Ready"
-            )
-        end
-
-        local RecorderOutput =
-            RecorderTab:Label({
-                Title = "RECORDER:",
-                Desc = ""
-            })
-
-        local RecorderLines = {}
-
-        Recorder = {}
-
-        function Recorder:Clear()
-            table.clear(RecorderLines)
-
-            if RecorderOutput then
-                if RecorderOutput.SetDesc then
-                    RecorderOutput:SetDesc("")
-                elseif RecorderOutput.Set then
-                    RecorderOutput:Set("")
-                end
-            end
-        end
-
-        function Recorder:Log(message)
-            RecorderLines[#RecorderLines + 1] =
-                tostring(message or "")
-
-            while #RecorderLines > 12 do
-                table.remove(RecorderLines, 1)
-            end
-
-            local output =
-                table.concat(
-                    RecorderLines,
-                    "\n"
-                )
-
-            if RecorderOutput then
-                if RecorderOutput.SetDesc then
-                    RecorderOutput:SetDesc(output)
-                elseif RecorderOutput.Set then
-                    RecorderOutput:Set(output)
-                end
-            end
-        end
 
         RecorderTab:Button({
             Title = "START",
             Desc = "",
             Callback = function()
                 Recorder:Clear()
-
-                if game.PlaceId == LOBBY_PLACE_ID
-                    or game_state == "LOBBY" then
-
-                    Globals.record_strat = false
-
-                    if RecorderTab.SetStatus then
-                        RecorderTab:SetStatus("Recorder only works in-game.")
-                    end
-
-                    return
-                end
 
                 if not has_hook then
                     Recorder:Log("\nYour executor is not supported for recording and is \nonly meant for replaying strats.")
@@ -807,10 +701,6 @@ return function(ctx)
                 end
 
                 Recorder:Log("Recorder started")
-
-                if RecorderTab.SetStatus then
-                    RecorderTab:SetStatus("Recording...")
-                end
 
                 local current_mode = "Unknown"
                 local current_map = "Unknown"
@@ -894,7 +784,6 @@ return function(ctx)
 
                 sync_existing_towers()
                 last_wave = 0
-                current_record_file = get_next_record_file(current_mode)
                 Globals.record_strat = true
 
                 if writefile then
@@ -910,7 +799,7 @@ TDS:Mode("%s")%s
 
 ]], tower1, tower2, tower3, tower4, tower5, current_mode, game_info_str)
 
-                    writefile(current_record_file, config_header)
+                    writefile("Strat.txt", config_header)
                 end
 
                 Window:Notify({
@@ -927,24 +816,12 @@ TDS:Mode("%s")%s
             Desc = "",
             Callback = function()
                 Globals.record_strat = false
-
-                if RecorderTab.SetStatus then
-                    RecorderTab:SetStatus(
-                        (game.PlaceId == LOBBY_PLACE_ID or game_state == "LOBBY")
-                        and "Recorder only works in-game."
-                        or "Saved"
-                    )
-                end
-
                 if has_hook then
                     Recorder:Clear()
-                    Recorder:Log(
-                        "Strategy saved:\n"
-                        .. tostring(current_record_file or "Unknown")
-                    )
+                    Recorder:Log("Strategy saved, you may find it in \nyour workspace folder called 'Strat.txt'")
                     Window:Notify({
                         Title = "ADS",
-                        Desc = "Recording saved to " .. tostring(current_record_file or "AutoStrategy"),
+                        Desc = "Recording has been saved! Check your workspace folder for Strat.txt",
                         Time = 3,
                         Type = "normal"
                     })
