@@ -604,15 +604,44 @@ local function DirectGetCurrentWave()
     ) or 0
 end
 
-local function DirectWaitForWave(target)
+local function ParseWaveTimer(timer)
+    if type(timer) ~= "string" then
+        return nil
+    end
+
+    local minutes, seconds = timer:match("^(%d%d):([0-5]%d)$")
+    if minutes then
+        return tonumber(minutes) * 60 + tonumber(seconds)
+    end
+end
+
+local function DirectGetWaveTimerText()
+    local hud = PlayerGui:FindFirstChild("ReactGameTopGameDisplay")
+    local frame = hud and hud:FindFirstChild("Frame")
+    local timer = frame and frame:FindFirstChild("waveTimer")
+    local container = timer and timer:FindFirstChild("container")
+    local label = container and container:FindFirstChild("value")
+    return label and label.Text
+end
+
+local function DirectWaitForWave(target, targetSeconds)
     while IsStrategyRuntimeEnabled() do
         local currentWave =
             DirectGetCurrentWave()
 
-        if currentWave
-            and currentWave >= target then
+        if currentWave and currentWave >= target then
+            if targetSeconds == nil then
+                return true
+            end
 
-            return true
+            if currentWave > target then
+                return false
+            end
+
+            local remaining = ParseWaveTimer(DirectGetWaveTimerText())
+            if remaining and remaining <= targetSeconds then
+                return true
+            end
         end
 
         task.wait(0.25)
@@ -2400,10 +2429,18 @@ function TDS:TimeScale(val)
     return currentSpeed() == target
 end
 
-function TDS:WaitForWave(wave)
-    return DirectWaitForWave(
-        tonumber(wave) or 0
-    )
+function TDS:WaitForWave(wave, timer)
+    local target = tonumber(wave) or 0
+    if timer == nil then
+        return DirectWaitForWave(target)
+    end
+
+    local targetSeconds = ParseWaveTimer(timer)
+    if targetSeconds == nil then
+        return false
+    end
+
+    return DirectWaitForWave(target, targetSeconds)
 end
 
 function TDS:SetTarget(index, targetType)

@@ -643,10 +643,14 @@ return function(Context)
         return false
     end
 
-    local function GetCurrentWaveNoWait()
+    local function GetTopGameDisplayFrame()
         local playerGui = plr:FindFirstChild("PlayerGui")
         local gui = playerGui and playerGui:FindFirstChild("ReactGameTopGameDisplay")
-        local frame = gui and gui:FindFirstChild("Frame")
+        return gui and gui:FindFirstChild("Frame")
+    end
+
+    local function GetCurrentWaveNoWait()
+        local frame = GetTopGameDisplayFrame()
         local wave = frame and frame:FindFirstChild("wave")
         local container = wave and wave:FindFirstChild("container")
         local value = container and container:FindFirstChild("value")
@@ -994,10 +998,53 @@ return function(Context)
         return currentSpeed() == target
     end
 
-    function TDS:WaitForWave(wave)
-        return DirectWaitForWave(
-            tonumber(wave) or 0
-        )
+    local function ParseWaveTimer(timer)
+        if type(timer) ~= "string" then
+            return nil
+        end
+
+        local minutes, seconds = timer:match("^(%d%d):([0-5]%d)$")
+        if minutes then
+            return tonumber(minutes) * 60 + tonumber(seconds)
+        end
+    end
+
+    local function GetWaveTimerText()
+        local frame = GetTopGameDisplayFrame()
+        local timer = frame and frame:FindFirstChild("waveTimer")
+        local container = timer and timer:FindFirstChild("container")
+        local label = container and container:FindFirstChild("value")
+        return label and label.Text
+    end
+
+    function TDS:WaitForWave(wave, timer)
+        local target = tonumber(wave) or 0
+        if timer == nil then
+            return DirectWaitForWave(target)
+        end
+
+        local targetSeconds = ParseWaveTimer(timer)
+        if targetSeconds == nil then
+            return false
+        end
+
+        while IsStrategyRuntimeEnabled() do
+            local currentWave = GetCurrentWaveNoWait()
+            if currentWave and currentWave > target then
+                return false
+            end
+
+            if currentWave == target then
+                local remaining = ParseWaveTimer(GetWaveTimerText())
+                if remaining and remaining <= targetSeconds then
+                    return true
+                end
+            end
+
+            task.wait(0.25)
+        end
+
+        return false
     end
 
     function TDS:SetTarget(index, targetType)
