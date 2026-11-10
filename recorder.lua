@@ -859,7 +859,20 @@ TDS:Mode("%s")%s
                 end
                 
                 local command
-                if Globals.StackEnabled then
+                local stacker = Globals.__codexTowerPlacementYOffset
+                local offset
+                if type(stacker) == "table" then
+                    if stacker.recorderManaged and stacker.enabled == true then
+                        offset = 25
+                    elseif not stacker.recorderManaged and type(stacker.offset) == "number" and stacker.offset > 0 then
+                        offset = stacker.offset
+                    end
+                end
+
+                if offset then
+                    pos_y -= offset
+                end
+                if Globals.StackEnabled or offset then
                     command = 'TDS:Place("' .. tower_name .. '", ' .. tostring(pos_x) .. ', ' .. tostring(pos_y) .. ', ' .. tostring(pos_z) .. ', true)'
                 else
                     command = 'TDS:Place("' .. tower_name .. '", ' .. tostring(pos_x) .. ', ' .. tostring(pos_y) .. ', ' .. tostring(pos_z) .. ')'
