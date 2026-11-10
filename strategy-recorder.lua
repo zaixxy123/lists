@@ -1,0 +1,1123 @@
+local Globals = getgenv()
+
+return function(ctx)
+    if not ctx or not ctx.Tab or not ctx.Library then
+        return
+    end
+
+    local RecorderTab = ctx.Tab
+    local replicated_storage = ctx.ReplicatedStorage or game:GetService("ReplicatedStorage")
+    local http_service = ctx.HttpService or game:GetService("HttpService")
+    local game_state = ctx.GameState or "UNKNOWN"
+    local workspace_ref = ctx.workspace or workspace
+
+    local players_service = game:GetService("Players")
+    local local_player = ctx.LocalPlayer or players_service.LocalPlayer or players_service.PlayerAdded:Wait()
+
+    Globals.record_strat = Globals.record_strat or false
+
+    local spawned_towers = {}
+    local tower_count = 0
+    local last_wave = 0
+    local Recorder
+    local recording = {}
+    local stackedPlacements = {}
+    local pendingPlacementLines = {}
+    local autoMercenary = false
+    local strategyFolder = "AutoStrategy"
+    local has_hook = type(hookmetamethod) == "function"
+    
+    local function get_wave_prefix()
+        local success, current_wave = pcall(function() return replicated_storage.StateReplicators.GameStateReplicator:GetAttribute("Wave") end)
+        if success and type(current_wave) == "number" and current_wave > last_wave then
+            last_wave = current_wave
+            return "\n-- [ Wave " .. current_wave .. " ] --\n"
+        end
+        return ""
+    end
+
+    local function record_action(command_str)
+        if not Globals.record_strat then return end
+        local prefix = get_wave_prefix()
+        table.insert(recording, prefix .. command_str .. "\n")
+        return #recording, prefix
+    end
+
+    local function formatPlacement(name, position, stacked)
+        return string.format("TDS:Place(%q, %s, %s, %s%s)", name,
+            tostring(position.X), tostring(position.Y), tostring(position.Z), stacked and ", true" or "")
+    end
+
+    local function log_line(message)
+        if Recorder and Recorder.Log then
+            Recorder:Log(message)
+        end
+    end
+
+    local function resolve_tower_index(tower)
+        if typeof(tower) ~= "Instance" then
+            return nil
+        end
+
+        if spawned_towers[tower] then
+            return spawned_towers[tower]
+        end
+
+        local current = tower.Parent
+        while current do
+            if spawned_towers[current] then
+                return spawned_towers[current]
+            end
+            current = current.Parent
+        end
+
+        return nil
+    end
+
+    local function sync_existing_towers()
+        if game_state ~= "GAME" then
+            return
+        end
+
+        local towers_folder = workspace_ref:FindFirstChild("Towers")
+        if not towers_folder then
+            return
+        end
+
+        table.clear(spawned_towers)
+        tower_count = 0
+
+        for _, tower in ipairs(towers_folder:GetChildren()) do
+            local replicator = tower:FindFirstChild("TowerReplicator")
+            if replicator and replicator:GetAttribute("OwnerId") == local_player.UserId then
+                tower_count += 1
+                spawned_towers[tower] = tower_count
+            end
+        end
+    end
+
+    local function num_to_str(n)
+        if type(n) ~= "number" then
+            return tostring(n)
+        end
+        if n == math.huge then
+            return "math.huge"
+        end
+        if n == -math.huge then
+            return "-math.huge"
+        end
+        if n ~= n then
+            return "0/0"
+        end
+        return tostring(n)
+    end
+
+    local serialize_value
+    local serialize_value_raw
+    local serialize_table
+    local serialize_table_raw
+
+    local function format_key(key)
+        if type(key) == "string" and key:match("^[_%a][_%w]*$") then
+            return key
+        end
+        if type(key) == "number" then
+            return "[" .. num_to_str(key) .. "]"
+        end
+        return "[" .. serialize_value(key) .. "]"
+    end
+
+    local function is_array(tbl)
+        local max_idx = 0
+        for k, _ in pairs(tbl) do
+            if type(k) ~= "number" or k < 1 or k % 1 ~= 0 then
+                return false, 0
+            end
+            if k > max_idx then
+                max_idx = k
+            end
+        end
+        return true, max_idx
+    end
+
+    serialize_value = function(v, depth)
+        depth = depth or 0
+        if depth > 4 then
+            return "nil"
+        end
+
+        local t = typeof(v)
+        if t == "string" then
+            return string.format("%q", v)
+        elseif t == "number" then
+            return num_to_str(v)
+        elseif t == "boolean" then
+            return tostring(v)
+        elseif t == "Vector3" then
+            return string.format(
+                "Vector3.new(%s, %s, %s)",
+                num_to_str(v.X),
+                num_to_str(v.Y),
+                num_to_str(v.Z)
+            )
+        elseif t == "CFrame" then
+            local comps = {v:GetComponents()}
+            local parts = {}
+            for i = 1, #comps do
+                parts[i] = num_to_str(comps[i])
+            end
+            return "CFrame.new(" .. table.concat(parts, ", ") .. ")"
+        elseif t == "Instance" then
+            local idx = resolve_tower_index(v)
+            if idx then
+                return tostring(idx)
+            end
+            return "nil"
+        elseif t == "table" then
+            return serialize_table(v, depth + 1)
+        end
+
+        return "nil"
+    end
+
+    serialize_value_raw = function(v, depth)
+        depth = depth or 0
+        if depth > 4 then
+            return "nil"
+        end
+
+        local t = typeof(v)
+        if t == "string" then
+            return string.format("%q", v)
+        elseif t == "number" then
+            return num_to_str(v)
+        elseif t == "boolean" then
+            return tostring(v)
+        elseif t == "Vector3" then
+            return string.format(
+                "Vector3.new(%s, %s, %s)",
+                num_to_str(v.X),
+                num_to_str(v.Y),
+                num_to_str(v.Z)
+            )
+        elseif t == "CFrame" then
+            local comps = {v:GetComponents()}
+            local parts = {}
+            for i = 1, #comps do
+                parts[i] = num_to_str(comps[i])
+            end
+            return "CFrame.new(" .. table.concat(parts, ", ") .. ")"
+        elseif t == "Instance" then
+            local full = v:GetFullName()
+            if type(full) == "string" and full ~= "" then
+                local parts = string.split(full, ".")
+                local expr = 'game:GetService("' .. parts[1] .. '")'
+                for i = 2, #parts do
+                    local part = parts[i]
+                    if part:match("^[_%a][_%w]*$") then
+                        expr = expr .. "." .. part
+                    else
+                        expr = expr .. "[" .. string.format("%q", part) .. "]"
+                    end
+                end
+                return expr
+            end
+            return "nil"
+        elseif t == "table" then
+            return serialize_table_raw(v, depth + 1)
+        end
+
+        return "nil"
+    end
+
+    serialize_table = function(tbl, depth)
+        local is_arr, max_idx = is_array(tbl)
+        local parts = {}
+
+        if is_arr then
+            for i = 1, max_idx do
+                parts[i] = serialize_value(tbl[i], depth)
+            end
+        else
+            local keys = {}
+            for k, _ in pairs(tbl) do
+                table.insert(keys, k)
+            end
+            table.sort(keys, function(a, b)
+                return tostring(a) < tostring(b)
+            end)
+            for _, k in ipairs(keys) do
+                table.insert(parts, format_key(k) .. " = " .. serialize_value(tbl[k], depth))
+            end
+        end
+
+        return "{" .. table.concat(parts, ", ") .. "}"
+    end
+
+    serialize_table_raw = function(tbl, depth)
+        local is_arr, max_idx = is_array(tbl)
+        local parts = {}
+
+        if is_arr then
+            for i = 1, max_idx do
+                parts[i] = serialize_value_raw(tbl[i], depth)
+            end
+        else
+            local keys = {}
+            for k, _ in pairs(tbl) do
+                table.insert(keys, k)
+            end
+            table.sort(keys, function(a, b)
+                return tostring(a) < tostring(b)
+            end)
+            for _, k in ipairs(keys) do
+                local key_str
+                if type(k) == "string" and k:match("^[_%a][_%w]*$") then
+                    key_str = k
+                elseif type(k) == "number" then
+                    key_str = "[" .. num_to_str(k) .. "]"
+                else
+                    key_str = "[" .. serialize_value_raw(k, depth) .. "]"
+                end
+                table.insert(parts, key_str .. " = " .. serialize_value_raw(tbl[k], depth))
+            end
+        end
+
+        return "{" .. table.concat(parts, ", ") .. "}"
+    end
+
+    local function build_remote_call(remote, method, args)
+        if typeof(remote) ~= "Instance" then
+            return nil
+        end
+
+        local full = remote:GetFullName()
+        if type(full) ~= "string" or full == "" then
+            return nil
+        end
+
+        local parts = string.split(full, ".")
+        local expr = 'game:GetService("' .. parts[1] .. '")'
+        for i = 2, #parts do
+            local part = parts[i]
+            if part:match("^[_%a][_%w]*$") then
+                expr = expr .. "." .. part
+            else
+                expr = expr .. "[" .. string.format("%q", part) .. "]"
+            end
+        end
+
+        local arg_parts = {}
+        for i = 1, #args do
+            arg_parts[i] = serialize_value_raw(args[i])
+        end
+
+        return expr .. ":" .. method .. "(" .. table.concat(arg_parts, ", ") .. ")"
+    end
+
+    local function is_consumable_call(remote, args)
+        local first = args[1]
+        if type(first) == "string" then
+            local lower = first:lower()
+            if lower:find("consum") then
+                return true
+            end
+            if lower:find("item") and type(args[2]) == "string" and tostring(args[2]):lower():find("use") then
+                return true
+            end
+        end
+
+        if typeof(remote) == "Instance" then
+            local full = remote:GetFullName()
+            if type(full) == "string" then
+                local lower = full:lower()
+                if lower:find("consum") then
+                    return true
+                end
+                if lower:find("item") and lower:find("use") then
+                    return true
+                end
+            end
+        end
+
+        return false
+    end
+
+    local function any_string_contains(args, token)
+        for i = 1, #args do
+            local v = args[i]
+            if type(v) == "string" then
+                local lower = v:lower()
+                if lower:find(token, 1, true) then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+
+    local function collect_non_keyword_strings(args)
+        local keywords = {
+            troops = true,
+            troop = true,
+            option = true,
+            options = true,
+            target = true,
+            ability = true,
+            abilities = true,
+            activate = true,
+            set = true,
+            voting = true,
+            skip = true,
+            inventory = true,
+            equip = true,
+            unequip = true,
+            tower = true
+        }
+
+        local list = {}
+        for i = 1, #args do
+            local v = args[i]
+            if type(v) == "string" then
+                local lower = v:lower()
+                if not keywords[lower] then
+                    table.insert(list, v)
+                end
+            end
+        end
+        return list
+    end
+
+    local function find_payload(args)
+        for i = 1, #args do
+            local v = args[i]
+            if type(v) == "table" then
+                if v.Troop or v.troop or v.Tower or v.tower then
+                    return v
+                end
+            end
+        end
+        return nil
+    end
+
+    local function find_tower_arg(args)
+        for i = 1, #args do
+            local v = args[i]
+            if typeof(v) == "Instance" then
+                local idx = resolve_tower_index(v)
+                if idx then
+                    return v
+                end
+            end
+        end
+        return nil
+    end
+
+    local function record_line(line, message)
+        record_action(line)
+        if message then
+            log_line(message)
+        end
+    end
+
+    Globals.__tds_record_equip = function(tower_name)
+        if type(tower_name) ~= "string" then
+            return
+        end
+        local cmd = string.format("TDS:Equip(%s)", string.format("%q", tower_name))
+        record_line(cmd, "Equipped: " .. tower_name)
+    end
+
+    Globals.__tds_record_unequip = function(tower_name)
+        if type(tower_name) ~= "string" then
+            return
+        end
+        local cmd = string.format("TDS:Unequip(%s)", string.format("%q", tower_name))
+        record_line(cmd, "Unequipped: " .. tower_name)
+    end
+
+    local function formatAbility(index, name, data)
+        local args = {tostring(index), string.format("%q", name)}
+        if data ~= nil and (type(data) ~= "table" or next(data) ~= nil) then
+            table.insert(args, serialize_value(data))
+        end
+        if name == "Hologram Tower" then
+            table.insert(args, "true")
+        end
+        return "TDS:Ability(" .. table.concat(args, ", ") .. ")"
+    end
+
+    local function handle_namecall(remote, method, args, results)
+        if not Globals.record_strat then
+            return
+        end
+
+        if method ~= "InvokeServer" and method ~= "FireServer" then
+            return
+        end
+
+        local handled = false
+
+        local a1 = args[1]
+        local a2 = args[2]
+        local a3 = args[3]
+        local a4 = args[4]
+        local a5 = args[5]
+
+        if a1 == "Troops" and a2 == "Abilities" and a3 == "Activate" then
+            if type(a4) == "table" and type(a4.Name) == "string" then
+                local abilityName = a4.Name
+                if abilityName == "Call Of Arms" or abilityName == "Support Caravan" or abilityName == "Drop The Beat" or abilityName == "Raise The Dead"
+                    or (autoMercenary and abilityName == "Air-Drop") then
+                    return
+                end
+            end
+            
+            if not results or results[1] ~= true then
+                return
+            end
+            
+            if type(a4) == "table" then
+                local idx = resolve_tower_index(a4.Troop)
+                local name = a4.Name
+                if idx and type(name) == "string" then
+                    local data = a4.Data
+                    local cmd = formatAbility(idx, name, data)
+
+                    record_line(cmd, "Ability: " .. name .. " (Index: " .. idx .. ")")
+                    handled = true
+                    return
+                end
+            end
+        end
+
+        if a1 == "Troops" and a2 == "Target" and a3 == "Set" then
+            if type(a4) == "table" then
+                local idx = resolve_tower_index(a4.Troop)
+                local target_type = a4.Target
+                if idx and type(target_type) == "string" then
+                    local cmd = string.format("TDS:SetTarget(%d, %s)", idx, string.format("%q", target_type))
+                    record_line(cmd, "Target: " .. idx .. " -> " .. target_type)
+                    handled = true
+                    return
+                end
+            end
+        end
+
+        if a1 == "Troops" and a2 == "Upgrade" and a3 == "Set" then
+            if type(a4) == "table" then
+                local tower = a4.Troop
+                local my_index = resolve_tower_index(tower)
+                local path = a4.Path or 1
+
+                if my_index and tower and results and results[1] == true then
+                    local replicator = tower:FindFirstChild("TowerReplicator")
+                    local tower_name = replicator and replicator:GetAttribute("Name") or tower.Name
+
+                    local cmd = (path > 1) and string.format("TDS:Upgrade(%d, %d)", my_index, path) or string.format("TDS:Upgrade(%d)", my_index)
+            
+                    record_line(cmd, "Upgraded " .. tower_name .. " (Index: " .. my_index .. ")")
+                    handled = true
+                    return
+                end
+            end
+        end
+
+        if a1 == "Troops" and a2 == "Option" and a3 == "Set" then
+            if type(a4) == "table" then
+                local idx = resolve_tower_index(a4.Troop)
+                local opt_name = a4.Name or a4.Option or a4.Key or a4.Track
+                local opt_val = a4.Value or a4.Val
+                if idx and type(opt_name) == "string" then
+                    local cmd = string.format(
+                        "TDS:SetOption(%d, %s, %s)",
+                        idx,
+                        string.format("%q", opt_name),
+                        serialize_value(opt_val)
+                    )
+                    record_line(cmd, "Option: " .. idx .. " " .. opt_name .. " = " .. tostring(opt_val))
+                    handled = true
+                    return
+                end
+            end
+        end
+
+        if a1 == "Troops" and a2 == "TowerServerEvent" and a3 == "ToggleSelectedTower" then
+            local idx = resolve_tower_index(a4)
+            local target_idx = resolve_tower_index(a5)
+            if idx and target_idx then
+                local cmd = string.format("TDS:MedicSelect(%d, %d)", idx, target_idx)
+                record_line(cmd, "Medic: " .. idx .. " -> " .. target_idx)
+                handled = true
+                return
+            end
+        end
+
+        if a1 == "Voting" and a2 == "Skip" then
+            local current_wave = 0
+            current_wave = replicated_storage.StateReplicators.GameStateReplicator:GetAttribute("Wave") or 0
+            if current_wave == 0 then
+                record_line("TDS:Ready()", "Readied up for the match")
+            else
+                record_line("TDS:VoteSkip(" .. current_wave .. ")", "Voted to skip wave " .. current_wave)
+            end
+            handled = true
+            return
+        end
+
+        if a1 == "Inventory" and a2 == "Equip" and a3 == "tower" then
+            if type(args[4]) == "string" then
+                local tower_name = args[4]
+                local cmd = string.format("TDS:Equip(%s)", string.format("%q", tower_name))
+                record_line(cmd, "Equipped: " .. tower_name)
+            end
+            handled = true
+            return
+        end
+
+        if a1 == "Inventory" and a2 == "Unequip" and a3 == "tower" then
+            if type(args[4]) == "string" then
+                local tower_name = args[4]
+                local cmd = string.format("TDS:Unequip(%s)", string.format("%q", tower_name))
+                record_line(cmd, "Unequipped: " .. tower_name)
+            end
+            handled = true
+            return
+        end
+
+        if is_consumable_call(remote, args) then
+            local raw_call = build_remote_call(remote, method, args)
+            if raw_call then
+                record_line(raw_call, "Consumable used")
+            end
+            handled = true
+            return
+        end
+
+        if handled then
+            return
+        end
+
+        if a1 ~= "Troops" then
+            return
+        end
+
+        local payload = find_payload(args)
+        local tower_obj = payload and (payload.Troop or payload.troop or payload.Tower or payload.tower) or find_tower_arg(args)
+        local idx = resolve_tower_index(tower_obj)
+        if not idx then
+            return
+        end
+
+        local strings = collect_non_keyword_strings(args)
+        local has_option = any_string_contains(args, "option") or any_string_contains(args, "track")
+        local has_ability = any_string_contains(args, "abil")
+        local has_target = any_string_contains(args, "target")
+
+        if has_option then
+            local opt_name = payload and (payload.Name or payload.Option or payload.Key or payload.Track)
+            local opt_val = payload and (payload.Value or payload.Val)
+
+            if not opt_name and #strings >= 1 then
+                opt_name = strings[1]
+            end
+            if opt_val == nil and #strings >= 2 then
+                opt_val = strings[2]
+            end
+            if not opt_name and any_string_contains(args, "track") then
+                opt_name = "Track"
+            end
+
+            if opt_name then
+                local cmd = string.format(
+                    "TDS:SetOption(%d, %s, %s)",
+                    idx,
+                    string.format("%q", opt_name),
+                    serialize_value(opt_val)
+                )
+                record_line(cmd, "Option: " .. idx .. " " .. opt_name .. " = " .. tostring(opt_val))
+            end
+            return
+        end
+
+        if has_target then
+            local target_type = payload and payload.Target or (#strings >= 1 and strings[1] or nil)
+            if target_type then
+                local cmd = string.format("TDS:SetTarget(%d, %s)", idx, string.format("%q", target_type))
+                record_line(cmd, "Target: " .. idx .. " -> " .. tostring(target_type))
+            end
+            return
+        end
+
+        if has_ability then
+            local name = payload and payload.Name or (#strings >= 1 and strings[1] or nil)
+            if name then
+                local data = payload and payload.Data or nil
+                local cmd = formatAbility(idx, name, data)
+                record_line(cmd, "Ability: " .. name .. " (Index: " .. idx .. ")")
+            end
+            return
+        end
+    end
+
+    do
+        local logPanel = RecorderTab:Label({Title = "Recorder log"})
+        local element = logPanel.Instance
+        local textStyle = element.DescLabel
+        textStyle.Visible = false
+
+        local viewport = Instance.new("ScrollingFrame")
+        viewport.Name = "RecorderLogViewport"
+        viewport.LayoutOrder = 1
+        viewport.Size = UDim2.new(1, 0, 0, 110)
+        viewport.BackgroundTransparency = 1
+        viewport.BorderSizePixel = 0
+        viewport.ScrollBarThickness = 5
+        viewport.ScrollingDirection = Enum.ScrollingDirection.Y
+        viewport.CanvasSize = UDim2.new()
+        viewport.Parent = element.LabelHolder
+
+        local rows = Instance.new("UIListLayout")
+        rows.SortOrder = Enum.SortOrder.LayoutOrder
+        rows.Parent = viewport
+
+        local function updateCanvas()
+            local height = rows.AbsoluteContentSize.Y
+            viewport.CanvasSize = UDim2.fromOffset(0, height)
+            viewport.CanvasPosition = Vector2.new(0, math.max(0, height - viewport.AbsoluteWindowSize.Y))
+        end
+
+        rows:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateCanvas)
+
+        local logRows = {}
+        Recorder = {}
+
+        function Recorder:Log(message)
+            local row = textStyle:Clone()
+            row.Name = "LogEntry"
+            row.LayoutOrder = #logRows + 1
+            row.Size = UDim2.new(1, -8, 0, 0)
+            row.TextYAlignment = Enum.TextYAlignment.Top
+            row.Text = tostring(message)
+            row.Visible = true
+            row.Parent = viewport
+            table.insert(logRows, row)
+        end
+
+        function Recorder:Clear()
+            for _, row in ipairs(logRows) do
+                row:Destroy()
+            end
+            table.clear(logRows)
+            viewport.CanvasPosition = Vector2.zero
+        end
+
+        Recorder:Log("Ready")
+
+        local strategyName = RecorderTab:Textbox({
+            Title = "Strategy name",
+            Placeholder = "Strat",
+            ClearTextOnFocus = false,
+            MaxLength = 80,
+        })
+
+        RecorderTab:Button({
+            Title = "START",
+            Desc = "",
+            Callback = function()
+                if Globals.record_strat then return end
+                Recorder:Clear()
+
+                if not has_hook then
+                    Recorder:Log("\nYour executor is not supported for recording and is \nonly meant for replaying strats.")
+                    return
+                end
+
+                if has_hook then
+                    Globals.__tds_recorder_handler = function(remote, method, args, results)
+                        handle_namecall(remote, method, args, results)
+                    end
+
+                    if not Globals.__tds_recorder_hooked then
+                        Globals.__tds_recorder_hooked = true
+                        local original
+                        original = hookmetamethod(game, "__namecall", function(self, ...)
+                            local method = getnamecallmethod and getnamecallmethod() or nil
+                            local args = {...}
+                            local results = table.pack(original(self, ...))
+                            local handler = Globals.__tds_recorder_handler
+                            if handler and method then
+                                task.spawn(function()
+                                    local set_id = setthreadidentity or setidentity or setthreadcontext
+                                    if set_id then set_id(7) end
+                                    pcall(handler, self, method, args, results)
+                                end)
+                            end
+                            return table.unpack(results, 1, results.n)
+                        end)
+                    end
+                end
+
+                Recorder:Log("Recorder started")
+
+                local current_mode = "Unknown"
+                local current_map = "Unknown"
+                local skip_game_info = false
+                
+                local state_folder = replicated_storage:FindFirstChild("State")
+                if state_folder then
+                    current_mode = state_folder.Difficulty.Value
+                    current_map = state_folder.Map.Value
+                    local mode_obj = state_folder:FindFirstChild("Mode")
+                    if mode_obj then
+                        if mode_obj.Value == "Hardcore" then
+                            if current_mode == "Hard" then
+                                current_mode = "Voidcore"
+                            else
+                                current_mode = "Hardcore"
+                            end
+                        elseif mode_obj.Value == "DuckEvent" then
+                            if current_mode == "Easy" then
+                                current_mode = "DuckyEasy"
+                            elseif current_mode == "Hard" then
+                                current_mode = "DuckyHard"
+                            end
+                        end
+                    end
+                    if current_mode == "Trial" or (mode_obj and (mode_obj.Value == "Special" or mode_obj.Value == "DuckEvent")) then
+                        skip_game_info = true
+                    end
+                end
+
+                local tower1, tower2, tower3, tower4, tower5 = "None", "None", "None", "None", "None"
+                local current_modifiers = "" 
+                local state_replicators = replicated_storage:FindFirstChild("StateReplicators")
+
+                if state_replicators then
+                    for _, folder in ipairs(state_replicators:GetChildren()) do
+                        if folder.Name == "PlayerReplicator" and folder:GetAttribute("UserId") == local_player.UserId then
+                            local equipped = folder:GetAttribute("EquippedTowers")
+                            if type(equipped) == "string" then
+                                local cleaned_json = equipped:match("%[.*%]") 
+                                
+                                local success, tower_table = pcall(function()
+                                    return http_service:JSONDecode(cleaned_json)
+                                end)
+
+                                if success and type(tower_table) == "table" then
+                                    tower1 = tower_table[1] or "None"
+                                    tower2 = tower_table[2] or "None"
+                                    tower3 = tower_table[3] or "None"
+                                    tower4 = tower_table[4] or "None"
+                                    tower5 = tower_table[5] or "None"
+                                end
+                            end
+                        end
+
+                        if folder.Name == "ModifierReplicator" then
+                            local raw_votes = folder:GetAttribute("Votes")
+                            if type(raw_votes) == "string" then
+                                local cleaned_json = raw_votes:match("{.*}") 
+                                
+                                local success, mod_table = pcall(function()
+                                    return http_service:JSONDecode(cleaned_json)
+                                end)
+
+                                if success and type(mod_table) == "table" then
+                                    local mods = {}
+                                    for mod_name, _ in pairs(mod_table) do
+                                        table.insert(mods, mod_name .. " = true")
+                                    end
+                                    current_modifiers = table.concat(mods, ", ")
+                                end
+                            end
+                        end
+                    end
+                end
+
+                Recorder:Log("Mode: " .. current_mode)
+                Recorder:Log("Map: " .. current_map)
+                Recorder:Log("Towers: " .. tower1 .. ", " .. tower2)
+                Recorder:Log(tower3 .. ", " .. tower4 .. ", " .. tower5)
+
+                sync_existing_towers()
+                last_wave = 0
+                local game_info_str = ""
+                if not skip_game_info then
+                        game_info_str = string.format('\nTDS:GameInfo("%s", {%s})', current_map, current_modifiers)
+                end
+                local config_header = string.format([[
+TDS:Loadout("%s", "%s", "%s", "%s", "%s")
+TDS:Mode("%s")%s
+
+]], tower1, tower2, tower3, tower4, tower5, current_mode, game_info_str)
+
+                recording = {config_header}
+                table.clear(stackedPlacements)
+                table.clear(pendingPlacementLines)
+                Globals.record_strat = true
+
+                autoMercenary = false
+                if game_state == "GAME" then
+                    local loadout = {tower1, tower2, tower3, tower4, tower5}
+                    local thisRecording = recording
+                    if table.find(loadout, "Gatling Gun") and type(ctx.StartRecorderGatling) == "function" then
+                        task.spawn(ctx.StartRecorderGatling)
+                    end
+
+                    local support = {
+                        {"Commander", "AutoChain"},
+                        {"Mercenary Base", "Mercenary"},
+                        {"DJ Booth", "AutoDJ"},
+                        {"Necromancer", "AutoNecro"},
+                    }
+
+                    task.spawn(function()
+                        local api
+                        for _, automation in ipairs(support) do
+                            local towerName, method = table.unpack(automation)
+                            if table.find(loadout, towerName) then
+                                if not Globals.record_strat or recording ~= thisRecording then return end
+                                if not api then
+                                    local ok, result = pcall(ctx.GetRecorderSupportAPI)
+                                    if not Globals.record_strat or recording ~= thisRecording then return end
+                                    if not ok or type(result) ~= "table" then
+                                        Recorder:Log("Could not load tower automation.")
+                                        return
+                                    end
+                                    api = result
+                                end
+                                local ok, started = pcall(api[method], api)
+                                if ok and started ~= false then
+                                    if method == "Mercenary" then autoMercenary = true end
+                                    Recorder:Log("Auto enabled for " .. towerName)
+                                else
+                                    Recorder:Log("Could not start auto for " .. towerName)
+                                end
+                            end
+                        end
+                    end)
+                end
+
+                ctx.Library:Notify({
+                    Title = "ADS",
+                    Content = "Recorder has started, you may place down your towers now.",
+                    Duration = 3
+                })
+            end
+        })
+
+        RecorderTab:Button({
+            Title = "SAVE",
+            Desc = "",
+            Callback = function()
+                if not Globals.record_strat then return end
+
+                if type(writefile) ~= "function" then
+                    Recorder:Log("This executor cannot save files.")
+                    return
+                end
+
+                local name = (strategyName.Value or ""):match("^%s*(.-)%s*$")
+                name = name:gsub("%.[tT][xX][tT]$", ""):gsub("[^%w_ %-]", "_")
+                name = name:match("^%s*(.-)%s*$")
+                if name == "" then
+                    name = "Strat"
+                end
+
+                local upperName = name:upper()
+                if upperName == "CON" or upperName == "PRN" or upperName == "AUX" or upperName == "NUL"
+                    or upperName:match("^COM%d$") or upperName:match("^LPT%d$") then
+                    name = "_" .. name
+                end
+                local filename = name .. ".txt"
+                local strategyPath = strategyFolder .. "/" .. filename
+                if type(makefolder) == "function" then
+                    pcall(makefolder, strategyFolder)
+                end
+                if not pcall(writefile, strategyPath, table.concat(recording)) then
+                    Recorder:Log("Could not save " .. strategyPath .. ". Try Save again.")
+                    return
+                end
+
+                Globals.record_strat = false
+                table.clear(recording)
+                local message = "Saved " .. strategyPath
+                Recorder:Clear()
+                Recorder:Log(message)
+                Recorder:Log("To load it, open the Auto Strategy tab.")
+                Recorder:Log("Select " .. filename .. " under Strategy File, then turn on Enable Auto Strategy.")
+                ctx.Library:Notify({
+                    Title = "ADS",
+                    Content = message,
+                    Duration = 3
+                })
+            end
+        })
+
+        local stacking = Globals.__codexTowerPlacementYOffset
+        local function installStacking()
+            local remote = replicated_storage:WaitForChild("RemoteFunction", 5)
+            assert(remote and remote:IsA("RemoteFunction"), "Placement remote is unavailable.")
+            local sharedFunctions = require(replicated_storage.Shared.Modules.SharedGameFunctions)
+            local originalCheck = sharedFunctions.CheckTowerCollisions
+            assert(type(originalCheck) == "function" and not table.isfrozen(sharedFunctions),
+                "The placement collision check is unavailable.")
+
+            local state = {enabled = false, recorderManaged = true}
+            local originalNamecall
+            originalNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+                if state.enabled and self == remote and getnamecallmethod() == "InvokeServer" then
+                    local category, action, placement, towerName = ...
+                    if category == "Troops" and action == "Place" and type(placement) == "table"
+                        and typeof(placement.Position) == "Vector3" then
+                        local args = table.pack(...)
+                        local updated = table.clone(placement)
+                        updated.Position = placement.Position + Vector3.new(0, 25, 0)
+                        args[3] = updated
+                        local stacked
+                        if Globals.record_strat then
+                            stacked = {
+                                name = towerName,
+                                original = placement.Position,
+                                raised = updated.Position,
+                            }
+                            table.insert(stackedPlacements, stacked)
+                        end
+
+                        local results = table.pack(originalNamecall(self, table.unpack(args, 1, args.n)))
+                        if stacked then
+                            local index = table.find(stackedPlacements, stacked)
+                            local tower = results[1]
+                            if typeof(tower) == "Instance" then
+                                local line = pendingPlacementLines[tower]
+                                if index and line and Globals.record_strat then
+                                    recording[line.index] = line.prefix .. formatPlacement(line.name, stacked.original, true) .. "\n"
+                                    pendingPlacementLines[tower] = nil
+                                    table.remove(stackedPlacements, index)
+                                else
+                                    stacked.tower = tower
+                                end
+                            elseif index then
+                                table.remove(stackedPlacements, index)
+                            end
+                        end
+                        return table.unpack(results, 1, results.n)
+                    end
+                end
+                return originalNamecall(self, ...)
+            end))
+
+            function state.boundaryWrapper(towerName, position, team, ...)
+                local allowed, detail = originalCheck(towerName, position, team, ...)
+                if state.enabled and allowed == false and select("#", ...) == 0
+                    and typeof(position) == "Vector3" and type(detail) == "table"
+                    and detail.Model and detail.PrimaryPart then
+                    return true, CFrame.new(position)
+                end
+                return allowed, detail
+            end
+            sharedFunctions.CheckTowerCollisions = state.boundaryWrapper
+            Globals.__codexTowerPlacementYOffset = state
+            return state
+        end
+
+        local stackingToggle
+        stackingToggle = RecorderTab:Toggle({
+            Title = "Allow Stacking",
+            Desc = "Stack towers in the same spot.",
+            Value = stacking and stacking.recorderManaged and stacking.enabled == true or false,
+            Callback = function(enabled)
+                if not enabled then
+                    if stacking and stacking.recorderManaged then
+                        stacking.enabled = false
+                    end
+                    Globals.StackEnabled = false
+                    return
+                end
+
+                local errorMessage
+                if game_state ~= "GAME" then
+                    errorMessage = "Join a match to enable stacking."
+                elseif stacking and not stacking.recorderManaged then
+                    errorMessage = "Rejoin without the standalone stacking script to use this toggle."
+                elseif not stacking then
+                    local ok, result = pcall(installStacking)
+                    if ok then
+                        stacking = result
+                    else
+                        errorMessage = "Could not enable stacking: " .. tostring(result)
+                    end
+                end
+
+                if errorMessage then
+                    Recorder:Log(errorMessage)
+                    if stackingToggle then
+                        stackingToggle:SetValue(false)
+                    end
+                    return
+                end
+
+                stacking.enabled = true
+                Globals.StackEnabled = true
+            end,
+        })
+
+        if game_state == "GAME" then
+            local towers_folder = workspace_ref:WaitForChild("Towers", 5)
+            if not towers_folder then return end
+
+            towers_folder.ChildAdded:Connect(function(tower)
+                if not Globals.record_strat then return end
+                local stackingEnabled = Globals.StackEnabled == true or (stacking and stacking.enabled == true)
+                
+                local replicator = tower:WaitForChild("TowerReplicator", 5)
+                if not replicator or not Globals.record_strat then return end
+
+                local owner_id = replicator:GetAttribute("OwnerId")
+                if owner_id and owner_id ~= local_player.UserId then return end
+
+                if replicator:GetAttribute("Hologram") == true then return end
+
+                tower_count = tower_count + 1
+                local my_index = tower_count
+                spawned_towers[tower] = my_index
+
+                local tower_name = replicator:GetAttribute("Name") or tower.Name
+                local raw_pos = replicator:GetAttribute("Position")
+                
+                local position = typeof(raw_pos) == "Vector3" and raw_pos or tower:GetPivot().Position
+                local stacked = false
+                for index, placement in ipairs(stackedPlacements) do
+                    if placement.tower == tower
+                        or (not placement.tower and placement.name == tower_name
+                            and (placement.raised - position).Magnitude < 0.05) then
+                        position = placement.original
+                        stacked = true
+                        table.remove(stackedPlacements, index)
+                        break
+                    end
+                end
+
+                local lineIndex, prefix = record_action(formatPlacement(tower_name, position, stacked or stackingEnabled))
+                if lineIndex and not stacked and #stackedPlacements > 0 then
+                    pendingPlacementLines[tower] = {index = lineIndex, prefix = prefix, name = tower_name}
+                end
+                Recorder:Log("Placed " .. tower_name .. " (Index: " .. my_index .. ")")
+
+            end)
+
+            towers_folder.ChildRemoved:Connect(function(tower)
+                if not Globals.record_strat then return end
+                
+                local my_index = spawned_towers[tower]
+                if my_index then
+                    record_action(string.format('TDS:Sell(%d)', my_index))
+                    Recorder:Log("Sold Tower " .. my_index)
+                    
+                    spawned_towers[tower] = nil
+                end
+            end)
+        end
+    end
+end
