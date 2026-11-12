@@ -3111,7 +3111,7 @@ local function BuildEmbed(
         fields = fields,
         footer = {
             text =
-                "Rya Auto Progression  Progress Tracker"
+                "Macro Hub Progress Tracker"
         },
         timestamp =
             DateTime.now():ToIsoDate()
@@ -3144,7 +3144,7 @@ local function SendPayload(
     local success, response =
         pcall(function()
             local payload = {
-                username = "Rya Progression",
+                username = "Macro Hub",
                 embeds = {
                     BuildEmbed(
                         eventType,
