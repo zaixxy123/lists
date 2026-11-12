@@ -1373,174 +1373,106 @@ local function GetSupportTowers(
     return result
 end
 
-local function GetCommanderChainDelay(
-    interval
-)
-    local hotbar =
-        PlayerGui:FindFirstChild(
-            "ReactUniversalHotbar"
-        )
-
-    local frame =
-        hotbar
-        and hotbar:FindFirstChild(
-            "Frame"
-        )
-
-    local timescale =
-        frame
-        and frame:FindFirstChild(
-            "timescale"
-        )
-
-    if timescale
-        and timescale.Visible
-        and not timescale:FindFirstChild(
-            "Lock"
-        ) then
-
-        return interval / 2
+-- The Commander chain uses server time and the live ability-ammo store.
+local CommanderChainModules
+local function GetCommanderChainModules()
+    if CommanderChainModules then return CommanderChainModules end
+    local ok, gameState, ticks, ammoStore = pcall(function()
+        return require(ReplicatedStorage.Shared.Modules.GameState),
+            require(ReplicatedStorage.Shared.Modules.ServerTicks),
+            require(ReplicatedStorage.Client.Interfaces.Stores.Game.AbilityAmmoStore)
+    end)
+    if ok and type(gameState) == "table"
+        and type(ticks) == "table" and type(ticks.getTime) == "function"
+        and type(ammoStore) == "table" and type(ammoStore.getState) == "function" then
+        CommanderChainModules = {GameState = gameState, Ticks = ticks, Ammo = ammoStore}
     end
-
-    return interval
+    return CommanderChainModules
 end
 
 local function StartAutoCommanderChain()
-    if SupportAutomationRunning.AutoChain
-        or TDS.HasCommander ~= true then
-
+    if SupportAutomationRunning.AutoChain or TDS.HasCommander ~= true then
         return
     end
 
-    local config =
-        GetSupportAutomationConfig(
-            "AutoChain"
-        )
-
-    local towerName =
-        tostring(
-            config.Tower
-            or "Commander"
-        )
-
-    local abilityName =
-        tostring(
-            config.Ability
-            or "Call Of Arms"
-        )
-
-    local minUpgrade =
-        tonumber(
-            config.MinUpgrade
-        )
-        or 2
-
-    local interval =
-        math.max(
-            0.1,
-            tonumber(config.Interval) or 10.5
-        )
-
-    local cooldown =
-        math.max(
-            0,
-            tonumber(config.Cooldown) or 30
-        )
+    local config = GetSupportAutomationConfig("AutoChain")
+    local towerName = tostring(config.Tower or "Commander")
+    local abilityName = "Call Of Arms"
+    local minUpgrade = tonumber(config.MinUpgrade) or 2
 
     SupportAutomationRunning.AutoChain = true
-
     task.spawn(function()
-        local index = 1
-        local lastUsed = {}
+        local readyAt = setmetatable({}, {__mode = "k"})
+        local retryAt = setmetatable({}, {__mode = "k"})
+        local nextCast = 0
+        local lastTower
+        local previousTime
+        local wasStarted = false
 
-        while IsStrategyRuntimeEnabled()
-            and TDS.HasCommander == true do
-
-            local commanders =
-                GetSupportTowers(
-                    towerName,
-                    minUpgrade
-                )
-
-            if #commanders > 0 then
-                if index > #commanders then
-                    index = 1
-                end
-
-                local commander =
-                    commanders[index]
-
-                index = index % #commanders + 1
-
-                local usedAt =
-                    lastUsed[commander]
-
-                local ready =
-                    usedAt == nil
-                    or os.clock() - usedAt
-                        >= GetCommanderChainDelay(
-                            cooldown
-                        )
-
-                if ready then
-                    local commanderRep = commander:FindFirstChild("TowerReplicator")
-                    if commanderRep
-                        and (tonumber(commanderRep:GetAttribute("Upgrade")) or 0) >= 4
-                        and getgenv().SupportCaravan ~= false then
-                        pcall(function()
-                            rf:InvokeServer("Troops", "Abilities", "Activate", {
-                                Troop = commander,
-                                Name = "Support Caravan",
-                                Data = {}
-                            })
-                        end)
+        while IsStrategyRuntimeEnabled() and TDS.HasCommander == true do
+            local modules = GetCommanderChainModules()
+            if modules then
+                local okTime, now = pcall(modules.Ticks.getTime)
+                local started = modules.GameState.GameStarted == true
+                if okTime and type(now) == "number" then
+                    if (previousTime and now < previousTime - 1)
+                        or (started and not wasStarted) then
+                        table.clear(readyAt)
+                        table.clear(retryAt)
+                        nextCast = 0
+                        lastTower = nil
                     end
-                    local ok, result =
-                        pcall(function()
-                            return rf:InvokeServer(
-                                "Troops",
-                                "Abilities",
-                                "Activate",
-                                {
-                                    Troop = commander,
-                                    Name = abilityName,
-                                    Data = {}
-                                }
-                            )
+                    previousTime, wasStarted = now, started
+
+                    if started and not modules.GameState.GameOver and now >= nextCast then
+                        local towers = GetSupportTowers(towerName, minUpgrade)
+                        table.sort(towers, function(a, b)
+                            local aRep = a:FindFirstChild("TowerReplicator")
+                            local bRep = b:FindFirstChild("TowerReplicator")
+                            return (tonumber(aRep and aRep:GetAttribute("CreatedAt")) or 0)
+                                < (tonumber(bRep and bRep:GetAttribute("CreatedAt")) or 0)
                         end)
-
-                    -- Commander ability replies can be truthy
-                    -- without matching DirectResponseOK.
-                    local accepted =
-                        ok
-                        and result ~= nil
-                        and result ~= false
-                        and not (
-                            type(result) == "table"
-                            and result.Success == false
-                        )
-
-                    if accepted then
-                        lastUsed[commander] =
-                            os.clock()
-
-                        task.wait(
-                            GetCommanderChainDelay(
-                                interval
-                            )
-                        )
-                    else
-                        task.wait(0.25)
+                        local ammoOK, ammo = pcall(modules.Ammo.getState)
+                        ammo = ammoOK and type(ammo) == "table" and ammo or {}
+                        local start = table.find(towers, lastTower) or 0
+                        for offset = 1, #towers do
+                            local tower = towers[(start + offset - 1) % #towers + 1]
+                            local uid = tower:GetAttribute("TowerUID")
+                            local status = uid and ammo[abilityName .. tostring(uid)]
+                            local hasCharge = not status or status.ammo == nil
+                                or (tonumber(status.ammo) or 0) > 0
+                            if hasCharge and now >= (readyAt[tower] or 0)
+                                and os.clock() >= (retryAt[tower] or 0) then
+                                local rep = tower:FindFirstChild("TowerReplicator")
+                                if rep and (tonumber(rep:GetAttribute("Upgrade")) or 0) >= 4
+                                    and getgenv().SupportCaravan ~= false then
+                                    pcall(function()
+                                        rf:InvokeServer("Troops", "Abilities", "Activate", {
+                                            Troop = tower, Name = "Support Caravan", Data = {}
+                                        })
+                                    end)
+                                end
+                                local ok, accepted = pcall(function()
+                                    return rf:InvokeServer("Troops", "Abilities", "Activate", {
+                                        Troop = tower, Name = abilityName, Data = {}
+                                    })
+                                end)
+                                if ok and accepted == true then
+                                    local castTime = modules.Ticks.getTime()
+                                    readyAt[tower] = castTime + 30
+                                    nextCast = castTime + 10
+                                    lastTower = tower
+                                else
+                                    retryAt[tower] = os.clock() + 1
+                                end
+                                break
+                            end
+                        end
                     end
-                else
-                    task.wait(0.1)
                 end
-            else
-                index = 1
-                task.wait(0.2)
             end
+            task.wait(0.05)
         end
-
         SupportAutomationRunning.AutoChain = false
     end)
 end
