@@ -120,14 +120,109 @@ return function(Context)
         end
         return count, max
     end
+
+    -- Server-tick Commander chain with per-tower ammo checks and failed-cast retry.
+    local CommanderChainModules
+    local function GetCommanderChainModules()
+        if CommanderChainModules then return CommanderChainModules end
+        local ok, gameState, ticks, ammoStore = pcall(function()
+            return require(ReplicatedStorage.Shared.Modules.GameState),
+                require(ReplicatedStorage.Shared.Modules.ServerTicks),
+                require(ReplicatedStorage.Client.Interfaces.Stores.Game.AbilityAmmoStore)
+        end)
+        if ok and type(gameState) == "table"
+            and type(ticks) == "table" and type(ticks.getTime) == "function"
+            and type(ammoStore) == "table" and type(ammoStore.getState) == "function" then
+            CommanderChainModules = {GameState=gameState, Ticks=ticks, Ammo=ammoStore}
+        end
+        return CommanderChainModules
+    end
+
+    local function StartCommanderChain()
+        if TowerAutoRunning.Commander or not TowerAutoFlags.Commander then return end
+        TowerAutoRunning.Commander = true
+        task.spawn(function()
+            local readyAt = setmetatable({}, {__mode = "k"})
+            local retryAt = setmetatable({}, {__mode = "k"})
+            local nextCast = 0
+            local lastTower
+            local previousTime
+            local wasStarted = false
+            while TowerAutoFlags.Commander and IsStrategyRuntimeEnabled() do
+                local modules = GetCommanderChainModules()
+                if modules then
+                    local okTime, now = pcall(modules.Ticks.getTime)
+                    local started = modules.GameState.GameStarted == true
+                    if okTime and type(now) == "number" then
+                        if (previousTime and now < previousTime - 1)
+                            or (started and not wasStarted) then
+                            table.clear(readyAt)
+                            table.clear(retryAt)
+                            nextCast = 0
+                            lastTower = nil
+                        end
+                        previousTime, wasStarted = now, started
+                        if started and not modules.GameState.GameOver and now >= nextCast then
+                            local towers = SupportTowers("Commander", 2)
+                            table.sort(towers, function(a, b)
+                                local aRep = a:FindFirstChild("TowerReplicator")
+                                local bRep = b:FindFirstChild("TowerReplicator")
+                                return (tonumber(aRep and aRep:GetAttribute("CreatedAt")) or 0)
+                                    < (tonumber(bRep and bRep:GetAttribute("CreatedAt")) or 0)
+                            end)
+                            local ammoOK, ammo = pcall(modules.Ammo.getState)
+                            ammo = ammoOK and type(ammo) == "table" and ammo or {}
+                            local start = table.find(towers, lastTower) or 0
+                            for offset = 1, #towers do
+                                local tower = towers[(start + offset - 1) % #towers + 1]
+                                local uid = tower:GetAttribute("TowerUID")
+                                local status = uid and ammo["Call Of Arms" .. tostring(uid)]
+                                local hasCharge = not status or status.ammo == nil
+                                    or (tonumber(status.ammo) or 0) > 0
+                                if hasCharge and now >= (readyAt[tower] or 0)
+                                    and os.clock() >= (retryAt[tower] or 0) then
+                                    local rep = tower:FindFirstChild("TowerReplicator")
+                                    if rep and (tonumber(rep:GetAttribute("Upgrade")) or 0) >= 4
+                                        and getgenv().SupportCaravan ~= false then
+                                        ActivateSupport(tower, "Support Caravan")
+                                    end
+                                    local ok, accepted = pcall(function()
+                                        return rf:InvokeServer("Troops", "Abilities", "Activate", {
+                                            Troop = tower, Name = "Call Of Arms", Data = {}
+                                        })
+                                    end)
+                                    if ok and accepted == true then
+                                        local castTime = modules.Ticks.getTime()
+                                        readyAt[tower] = castTime + 30
+                                        nextCast = castTime + 10
+                                        lastTower = tower
+                                    else
+                                        retryAt[tower] = os.clock() + 1
+                                    end
+                                    break
+                                end
+                            end
+                        end
+                    end
+                end
+                task.wait(0.05)
+            end
+            TowerAutoRunning.Commander = false
+        end)
+    end
+
     local function StartSupportAuto(kind)
+        if kind == "Commander" then
+            StartCommanderChain()
+            return
+        end
         if TowerAutoRunning[kind] or not TowerAutoFlags[kind] then return end
         TowerAutoRunning[kind] = true
         task.spawn(function()
             local index, lastUsed = 1, {}
             while TowerAutoFlags[kind] and IsStrategyRuntimeEnabled() do
                 local name = kind == "DJ" and "DJ Booth" or kind
-                local minLevel = kind == "Commander" and 2 or (kind == "DJ" and 3 or 0)
+                local minLevel = kind == "DJ" and 3 or 0
                 local towers = SupportTowers(name, minLevel)
                 if #towers == 0 then
                     index = 1
@@ -137,24 +232,7 @@ return function(Context)
                     local tower = towers[index]
                     index = index % #towers + 1
                     local now = os.clock()
-                    if kind == "Commander" then
-                        local last = lastUsed[tower]
-                        if last == nil or now-last >= SupportDelay(30) then
-                            local rep = tower:FindFirstChild("TowerReplicator")
-                            if rep and (tonumber(rep:GetAttribute("Upgrade")) or 0) >= 4
-                                and getgenv().SupportCaravan ~= false then
-                                ActivateSupport(tower, "Support Caravan")
-                            end
-                            if ActivateSupport(tower, "Call Of Arms") then
-                                lastUsed[tower] = os.clock()
-                                task.wait(SupportDelay(10.5))
-                            else
-                                task.wait(0.25)
-                            end
-                        else
-                            task.wait(0.1)
-                        end
-                    elseif kind == "DJ" then
+                    if kind == "DJ" then
                         ActivateSupport(tower, "Drop The Beat")
                         task.wait(1)
                     else
