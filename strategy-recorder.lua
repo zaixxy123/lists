@@ -712,7 +712,7 @@ return function(ctx)
             viewport.CanvasPosition = Vector2.zero
         end
 
-        Recorder:Log("Ready")
+        Recorder:Log("Choose a Map first and make sure you are in map before recording")
 
         local strategyName = RecorderTab:Textbox({
             Title = "Strategy name",
