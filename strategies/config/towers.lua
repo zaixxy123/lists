@@ -30,6 +30,7 @@ return {
     }, 
  
     DisplayPriority = { 
+        "Time Dilator",
         "Engineer", 
         "Brawler", 
         "Accelerator", 
@@ -70,6 +71,7 @@ return {
     }, 
  
     Priority = { 
+        "Time Dilator",
         "Engineer", 
         "Brawler", 
         "Accelerator", 
@@ -115,6 +117,7 @@ return {
     }, 
  
     Info = { 
+        ["Time Dilator"] = {Type = "Currency", Currency = "Gems", Price = 3000, Level = 50}, 
         ["Engineer"] = {Type = "Currency", Currency = "Gems", Price = 4500, Level = 50}, 
         ["Brawler"] = {Type = "Currency", Currency = "Gems", Price = 1250, Level = 50}, 
         ["Accelerator"] = {Type = "Currency", Currency = "Gems", Price = 2500, Level = 50}, 
