@@ -1015,6 +1015,11 @@ return function(Context)
                 end
 
                 if not runOk then
+                    local rep = GetGameStateReplicator()
+                    if rep and rep:GetAttribute("GameOver") == true then
+                        return
+                    end
+
                     Globals.AutoStrategyEnabled = false
                     Saved.Enabled = false
                     Save()
@@ -1481,14 +1486,55 @@ return function(Context)
         local gameOverRep =
             GetGameStateReplicator()
 
-        local health =
+        task.wait(0.5)
+
+        local isDefeat = false
+        if gameOverRep then
+            for _, name in ipairs({"Won", "Win", "Victory"}) do
+                local val = gameOverRep:GetAttribute(name)
+                if val == false then
+                    isDefeat = true
+                    break
+                end
+            end
+            if not isDefeat then
+                for _, name in ipairs({"Result", "Outcome", "GameResult"}) do
+                    local val = tostring(gameOverRep:GetAttribute(name) or ""):lower()
+                    if val:find("defeat", 1, true) or val:find("loss", 1, true) or val:find("lose", 1, true) then
+                        isDefeat = true
+                        break
+                    end
+                end
+            end
+        end
+
+        if not isDefeat then
+            local rewards = PlayerGui:FindFirstChild("ReactGameNewRewards")
+            if rewards then
+                for _, object in ipairs(rewards:GetDescendants()) do
+                    if object:IsA("TextLabel") or object:IsA("TextButton") then
+                        local text = tostring(object.Text or ""):lower()
+                        if text:find("defeat", 1, true) then
+                            isDefeat = true
+                            break
+                        end
+                    end
+                end
+            end
+        end
+
+        local rawHealth =
             gameOverRep
             and tonumber(
                 gameOverRep:GetAttribute(
                     "Health"
                 )
             )
-            or 0
+
+        local health =
+            (isDefeat or (rawHealth ~= nil and rawHealth <= 0))
+            and 0
+            or (rawHealth or 0)
 
         local won =
             health > 0
@@ -1548,6 +1594,15 @@ return function(Context)
                 local timeoutAt =
                     os.clock() + 15
 
+                pcall(function()
+                    task.spawn(function()
+                        remoteFunction:InvokeServer(
+                            "Voting",
+                            "Skip"
+                        )
+                    end)
+                end)
+
                 repeat
                     if Saved.AutoRestartStrategy ~= true
                         or Globals.AutoStrategyEnabled ~= true then
@@ -1556,10 +1611,12 @@ return function(Context)
                     end
 
                     pcall(function()
-                        remoteFunction:InvokeServer(
-                            "Voting",
-                            "Skip"
-                        )
+                        task.spawn(function()
+                            remoteFunction:InvokeServer(
+                                "Voting",
+                                "Skip"
+                            )
+                        end)
                     end)
 
                     local waitUntil =
