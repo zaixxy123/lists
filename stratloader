@@ -1489,71 +1489,80 @@ return function(Context)
         local isDefeat = false
         local isVictory = false
 
-        local detectDeadline = os.clock() + 2.5
-        repeat
-            if gameOverRep then
-                for _, name in ipairs({"Won", "Win", "Victory"}) do
-                    local val = gameOverRep:GetAttribute(name)
-                    if val == false then
-                        isDefeat = true
-                        break
-                    elseif val == true then
-                        isVictory = true
-                        break
-                    end
-                end
-
-                if not isDefeat and not isVictory then
-                    for _, name in ipairs({"Result", "Outcome", "GameResult"}) do
-                        local val = tostring(gameOverRep:GetAttribute(name) or ""):lower()
-                        if val:find("defeat", 1, true) or val:find("loss", 1, true) or val:find("lose", 1, true) or val:find("lost", 1, true) then
-                            isDefeat = true
-                            break
-                        elseif val:find("victory", 1, true) or val:find("win", 1, true) or val:find("triumph", 1, true) then
-                            isVictory = true
-                            break
-                        end
-                    end
-                end
+        if gameOverRep then
+            local repHealth = tonumber(gameOverRep:GetAttribute("Health"))
+            if repHealth ~= nil and repHealth <= 0 then
+                isDefeat = true
             end
+        end
 
-            if not isDefeat and not isVictory then
-                local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-                local rewards = playerGui and playerGui:FindFirstChild("ReactGameNewRewards")
-                if rewards then
-                    local banner = rewards:FindFirstChild("RewardBanner", true)
-                    local bannerText = banner and banner:FindFirstChild("textLabel") and tostring(banner.textLabel.Text or ""):upper()
-                    if bannerText then
-                        if bannerText:find("TRIUMPH", 1, true) then
-                            isVictory = true
-                        elseif bannerText:find("LOST", 1, true) or bannerText:find("GAME OVER", 1, true) or bannerText:find("DEFEAT", 1, true) then
+        if not isDefeat then
+            local detectDeadline = os.clock() + 1.0
+            repeat
+                if gameOverRep then
+                    for _, name in ipairs({"Won", "Win", "Victory"}) do
+                        local val = gameOverRep:GetAttribute(name)
+                        if val == false then
                             isDefeat = true
+                            break
+                        elseif val == true then
+                            isVictory = true
+                            break
                         end
                     end
 
                     if not isDefeat and not isVictory then
-                        for _, object in ipairs(rewards:GetDescendants()) do
-                            if object:IsA("TextLabel") or object:IsA("TextButton") then
-                                local text = tostring(object.Text or ""):lower()
-                                if text:find("lost", 1, true) or text:find("defeat", 1, true) or text:find("game over", 1, true) then
-                                    isDefeat = true
-                                    break
-                                elseif text:find("victory", 1, true) or text:find("triumph", 1, true) then
-                                    isVictory = true
-                                    break
+                        for _, name in ipairs({"Result", "Outcome", "GameResult"}) do
+                            local val = tostring(gameOverRep:GetAttribute(name) or ""):lower()
+                            if val:find("defeat", 1, true) or val:find("loss", 1, true) or val:find("lose", 1, true) or val:find("lost", 1, true) then
+                                isDefeat = true
+                                break
+                            elseif val:find("victory", 1, true) or val:find("win", 1, true) or val:find("triumph", 1, true) then
+                                isVictory = true
+                                break
+                            end
+                        end
+                    end
+                end
+
+                if not isDefeat and not isVictory then
+                    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+                    local rewards = playerGui and playerGui:FindFirstChild("ReactGameNewRewards")
+                    if rewards then
+                        local banner = rewards:FindFirstChild("RewardBanner", true)
+                        local bannerText = banner and banner:FindFirstChild("textLabel") and tostring(banner.textLabel.Text or ""):upper()
+                        if bannerText then
+                            if bannerText:find("TRIUMPH", 1, true) then
+                                isVictory = true
+                            elseif bannerText:find("LOST", 1, true) or bannerText:find("GAME OVER", 1, true) or bannerText:find("DEFEAT", 1, true) then
+                                isDefeat = true
+                            end
+                        end
+
+                        if not isDefeat and not isVictory then
+                            for _, object in ipairs(rewards:GetDescendants()) do
+                                if object:IsA("TextLabel") or object:IsA("TextButton") then
+                                    local text = tostring(object.Text or ""):lower()
+                                    if text:find("lost", 1, true) or text:find("defeat", 1, true) or text:find("game over", 1, true) then
+                                        isDefeat = true
+                                        break
+                                    elseif text:find("victory", 1, true) or text:find("triumph", 1, true) then
+                                        isVictory = true
+                                        break
+                                    end
                                 end
                             end
                         end
                     end
                 end
-            end
 
-            if isDefeat or isVictory then
-                break
-            end
+                if isDefeat or isVictory then
+                    break
+                end
 
-            task.wait(0.2)
-        until os.clock() >= detectDeadline
+                task.wait(0.1)
+            until os.clock() >= detectDeadline
+        end
 
         local rawHealth =
             gameOverRep
@@ -1590,7 +1599,7 @@ return function(Context)
                     rematchEvent:FireServer()
 
                     local timeoutAt =
-                        os.clock() + 10
+                        os.clock() + 30
 
                     repeat
                         if Saved.AutoRestartStrategy ~= true
@@ -1625,9 +1634,7 @@ return function(Context)
                     )
 
                 local timeoutAt =
-                    os.clock() + 10
-
-                task.wait(1)
+                    os.clock() + 15
 
                 repeat
                     if Saved.AutoRestartStrategy ~= true
