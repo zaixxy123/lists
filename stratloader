@@ -1489,7 +1489,7 @@ return function(Context)
         local isDefeat = false
         local isVictory = false
 
-        local detectDeadline = os.clock() + 3.5
+        local detectDeadline = os.clock() + 2.5
         repeat
             if gameOverRep then
                 for _, name in ipairs({"Won", "Win", "Victory"}) do
@@ -1506,7 +1506,7 @@ return function(Context)
                 if not isDefeat and not isVictory then
                     for _, name in ipairs({"Result", "Outcome", "GameResult"}) do
                         local val = tostring(gameOverRep:GetAttribute(name) or ""):lower()
-                        if val:find("defeat", 1, true) or val:find("loss", 1, true) or val:find("lose", 1, true) then
+                        if val:find("defeat", 1, true) or val:find("loss", 1, true) or val:find("lose", 1, true) or val:find("lost", 1, true) then
                             isDefeat = true
                             break
                         elseif val:find("victory", 1, true) or val:find("win", 1, true) or val:find("triumph", 1, true) then
@@ -1518,17 +1518,30 @@ return function(Context)
             end
 
             if not isDefeat and not isVictory then
-                local rewards = PlayerGui:FindFirstChild("ReactGameNewRewards")
+                local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+                local rewards = playerGui and playerGui:FindFirstChild("ReactGameNewRewards")
                 if rewards then
-                    for _, object in ipairs(rewards:GetDescendants()) do
-                        if object:IsA("TextLabel") or object:IsA("TextButton") then
-                            local text = tostring(object.Text or ""):lower()
-                            if text:find("defeat", 1, true) then
-                                isDefeat = true
-                                break
-                            elseif text:find("victory", 1, true) or text:find("triumph", 1, true) then
-                                isVictory = true
-                                break
+                    local banner = rewards:FindFirstChild("RewardBanner", true)
+                    local bannerText = banner and banner:FindFirstChild("textLabel") and tostring(banner.textLabel.Text or ""):upper()
+                    if bannerText then
+                        if bannerText:find("TRIUMPH", 1, true) then
+                            isVictory = true
+                        elseif bannerText:find("LOST", 1, true) or bannerText:find("GAME OVER", 1, true) or bannerText:find("DEFEAT", 1, true) then
+                            isDefeat = true
+                        end
+                    end
+
+                    if not isDefeat and not isVictory then
+                        for _, object in ipairs(rewards:GetDescendants()) do
+                            if object:IsA("TextLabel") or object:IsA("TextButton") then
+                                local text = tostring(object.Text or ""):lower()
+                                if text:find("lost", 1, true) or text:find("defeat", 1, true) or text:find("game over", 1, true) then
+                                    isDefeat = true
+                                    break
+                                elseif text:find("victory", 1, true) or text:find("triumph", 1, true) then
+                                    isVictory = true
+                                    break
+                                end
                             end
                         end
                     end
@@ -1577,7 +1590,7 @@ return function(Context)
                     rematchEvent:FireServer()
 
                     local timeoutAt =
-                        os.clock() + 45
+                        os.clock() + 10
 
                     repeat
                         if Saved.AutoRestartStrategy ~= true
@@ -1612,9 +1625,9 @@ return function(Context)
                     )
 
                 local timeoutAt =
-                    os.clock() + 45
+                    os.clock() + 10
 
-                task.wait(1.5)
+                task.wait(1)
 
                 repeat
                     if Saved.AutoRestartStrategy ~= true
