@@ -11,22 +11,21 @@ return function(TDS, selectedTower)
         EvolvedLoadoutNames[selectedTower]
         or selectedTower
 
-    TDS:Loadout("Pyromancer", loadoutTower, "Crook Boss", "None", "None")
+TDS:Mode("Hardcore")
+TDS:GameInfo("Wretched Front")
+TDS:Loadout("Pyromancer", loadoutTower, "Crook Boss", "None", "None")
+TDS:Ready()
+TDS:VoteSkip()
+TDS:UpgradeTimes(1, 3)
 
-    TDS:Mode("Hardcore")
-    TDS:GameInfo("Wretched Front")
+TDS:Place("Crook Boss", -1.011622428894043, 0.864983081817627, -25.070846557617188)
+TDS:UpgradeTimes(2, 2)
 
-    TDS:VoteSkip()
+TDS:Place("Crook Boss", 0.8714807033538818, 0.6851585507392883, -22.64225959777832)
+TDS:UpgradeTimes(3, 2)
 
-    TDS:Place("Pyromancer", -5.936307430267334, 0.9551397562026978, -31.831748962402344, true)
-    TDS:Ready()
-    TDS:UpgradeTimes(1, 3)
-
-    TDS:Place("Crook Boss", -3.6180145740509033, 0.025390289723873138, -9.7833690643310547, true)
-    TDS:UpgradeTimes(2, 2)
-
-    TDS:Place("Crook Boss", -3.6180145740509033, 0.025390289723873138, -9.7833690643310547, true)
-    TDS:UpgradeTimes(3, 2)
+TDS:Place("Crook Boss", -2.1430044174194336, 0.6582517027854919, -22.24921989440918)
+TDS:UpgradeTimes(4, 1)
 
     TDS:WaitForWave(20)
     TDS:Sell(1)
