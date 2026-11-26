@@ -1,29 +1,29 @@
 return function(TDS)
-    TDS:Loadout("Pyromancer", "Scout", "Shotgunner", "Crook Boss", "Minigunner")
+TDS:Loadout("Pyromancer")
+TDS:Place("Pyromancer", -5.936307430267334, 0.9551397562026978, -31.831748962402344)
+TDS:Loadout("Scout", "Crook Boss", "Shotgunner", "Military Base", "Minigunner")
+TDS:Ready()
+TDS:VoteSkip()
+TDS:UpgradeTimes(1, 3)
 
-    TDS:Mode("Hardcore")
-    TDS:GameInfo("Wretched Front")
+TDS:Place("Crook Boss", -1.011622428894043, 0.864983081817627, -25.070846557617188)
+TDS:UpgradeTimes(2, 2)
 
-    TDS:VoteSkip()
+TDS:Place("Crook Boss", 0.8714807033538818, 0.6851585507392883, -22.64225959777832)
+TDS:UpgradeTimes(3, 2)
 
-    TDS:Place("Pyromancer", -5.936307430267334, 0.9551397562026978, -31.831748962402344, true)
-    TDS:Ready()
-    TDS:UpgradeTimes(1, 3)
+TDS:Place("Crook Boss", -2.1430044174194336, 0.6582517027854919, -22.24921989440918)
+TDS:UpgradeTimes(4, 1)
 
-    TDS:Place("Crook Boss", -3.6180145740509033, 0.025390289723873138, -9.7833690643310547, true)
-    TDS:UpgradeTimes(2, 2)
+TDS:Place("Scout", -0.295379638671875, 0.5882389545440674, -19.835119247436523)
 
-    TDS:Place("Crook Boss", -3.6180145740509033, 0.025390289723873138, -9.7833690643310547, true)
-    TDS:UpgradeTimes(3, 2)
+TDS:Place("Shotgunner", -2.8353796005249023, 0.5340116024017334, -19.835119247436523)
 
-    TDS:Place("Crook Boss", -3.6180145740509033, 0.025390289723873138, -9.7833690643310547, true)
-    TDS:UpgradeTimes(4, 2)
+TDS:Place("Minigunner", 2.7241523265838623, 0.6385520696640015, -20.164316177978516)
 
-    TDS:Place("Scout", -3.6180145740509033, 0.025390289723873138, -9.7833690643310547, true)
-    TDS:Place("Shotgunner", -3.6180145740509033, 0.025390289723873138, -9.7833690643310547, true)
-    TDS:WaitForWave(22)
-    TDS:Sell(1)
-    TDS:Place("Minigunner", -3.6180145740509033, 0.025390289723873138, -9.7833690643310547, true)
+TDS:WaitForWave(22)
+TDS:Sell(1)
+TDS:Place("Military Base", -5.926440715789795, 0.4585322141647339, -20.961814880371094)
 
     return true
 end
