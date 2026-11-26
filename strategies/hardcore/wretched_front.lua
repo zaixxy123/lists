@@ -1,4 +1,3 @@
-
 TDS:Mode("Hardcore")
 TDS:GameInfo("Wretched Front")
 TDS:Loadout("Pyromancer")
