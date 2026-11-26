@@ -31,7 +31,7 @@ return function(TDS, selectedTower)
     TDS:WaitForWave(20)
     TDS:Sell(1)
 
-    TDS:Place(loadoutTower, -3.6180145740509033, 0.025390289723873138, -9.7833690643310547, true)
+    TDS:Place(loadoutTower, -5.1009721755981445, -0.080512046813964844, -9.5659475326538086)
 
     return true
 end
