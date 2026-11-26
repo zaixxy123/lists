@@ -9,7 +9,7 @@ return {
                 "Pyromancer",
                 "Shotgunner",
                 "Minigunner",
-                "Military Base
+                "Military Base"
             },
             FarmTowers = {
                 "Pyromancer",
@@ -30,7 +30,7 @@ return {
                 {Name = "Operator", GameName = "Operator"},
                 {Name = "Juggernaut", GameName = "Juggernaut"},
                 {Name = "Kingpin", GameName = "Kingpin"},
-                {Name = "Enforcer", GameName = "Enforcer"}
+                {Name = "Enforcer", GameName = "Enforcer"},
                 {Name = "Mecha Base", GameName = "MechaBase"}                
             }
         }
