@@ -21,8 +21,6 @@ return function(ctx)
     local last_wave = 0
     local Recorder
     local recording = {}
-    local stackedPlacements = {}
-    local pendingPlacementLines = {}
     local autoMercenary = false
     local strategyFolder = "AutoStrategy"
     local has_hook = type(hookmetamethod) == "function"
@@ -43,9 +41,9 @@ return function(ctx)
         return #recording, prefix
     end
 
-    local function formatPlacement(name, position, stacked)
-        return string.format("TDS:Place(%q, %s, %s, %s%s)", name,
-            tostring(position.X), tostring(position.Y), tostring(position.Z), stacked and ", true" or "")
+    local function formatPlacement(name, position)
+        return string.format("TDS:Place(%q, %s, %s, %s)", name,
+            tostring(position.X), tostring(position.Y), tostring(position.Z))
     end
 
     local function log_line(message)
@@ -853,8 +851,6 @@ TDS:Mode("%s")%s
 ]], tower1, tower2, tower3, tower4, tower5, current_mode, game_info_str)
 
                 recording = {config_header}
-                table.clear(stackedPlacements)
-                table.clear(pendingPlacementLines)
                 Globals.record_strat = true
 
                 autoMercenary = false
@@ -955,121 +951,12 @@ TDS:Mode("%s")%s
             end
         })
 
-        local stacking = Globals.__codexTowerPlacementYOffset
-        local function installStacking()
-            local remote = replicated_storage:WaitForChild("RemoteFunction", 5)
-            assert(remote and remote:IsA("RemoteFunction"), "Placement remote is unavailable.")
-            local sharedFunctions = require(replicated_storage.Shared.Modules.SharedGameFunctions)
-            local originalCheck = sharedFunctions.CheckTowerCollisions
-            assert(type(originalCheck) == "function" and not table.isfrozen(sharedFunctions),
-                "The placement collision check is unavailable.")
-
-            local state = {enabled = false, recorderManaged = true}
-            local originalNamecall
-            originalNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
-                if state.enabled and self == remote and getnamecallmethod() == "InvokeServer" then
-                    local category, action, placement, towerName = ...
-                    if category == "Troops" and action == "Place" and type(placement) == "table"
-                        and typeof(placement.Position) == "Vector3" then
-                        local args = table.pack(...)
-                        local updated = table.clone(placement)
-                        updated.Position = placement.Position + Vector3.new(0, 25, 0)
-                        args[3] = updated
-                        local stacked
-                        if Globals.record_strat then
-                            stacked = {
-                                name = towerName,
-                                original = placement.Position,
-                                raised = updated.Position,
-                            }
-                            table.insert(stackedPlacements, stacked)
-                        end
-
-                        local results = table.pack(originalNamecall(self, table.unpack(args, 1, args.n)))
-                        if stacked then
-                            local index = table.find(stackedPlacements, stacked)
-                            local tower = results[1]
-                            if typeof(tower) == "Instance" then
-                                local line = pendingPlacementLines[tower]
-                                if index and line and Globals.record_strat then
-                                    recording[line.index] = line.prefix .. formatPlacement(line.name, stacked.original, true) .. "\n"
-                                    pendingPlacementLines[tower] = nil
-                                    table.remove(stackedPlacements, index)
-                                else
-                                    stacked.tower = tower
-                                end
-                            elseif index then
-                                table.remove(stackedPlacements, index)
-                            end
-                        end
-                        return table.unpack(results, 1, results.n)
-                    end
-                end
-                return originalNamecall(self, ...)
-            end))
-
-            function state.boundaryWrapper(towerName, position, team, ...)
-                local allowed, detail = originalCheck(towerName, position, team, ...)
-                if state.enabled and allowed == false and select("#", ...) == 0
-                    and typeof(position) == "Vector3" and type(detail) == "table"
-                    and detail.Model and detail.PrimaryPart then
-                    return true, CFrame.new(position)
-                end
-                return allowed, detail
-            end
-            sharedFunctions.CheckTowerCollisions = state.boundaryWrapper
-            Globals.__codexTowerPlacementYOffset = state
-            return state
-        end
-
-        local stackingToggle
-        stackingToggle = RecorderTab:Toggle({
-            Title = "Allow Stacking",
-            Desc = "Stack towers in the same spot.",
-            Value = stacking and stacking.recorderManaged and stacking.enabled == true or false,
-            Callback = function(enabled)
-                if not enabled then
-                    if stacking and stacking.recorderManaged then
-                        stacking.enabled = false
-                    end
-                    Globals.StackEnabled = false
-                    return
-                end
-
-                local errorMessage
-                if game_state ~= "GAME" then
-                    errorMessage = "Join a match to enable stacking."
-                elseif stacking and not stacking.recorderManaged then
-                    errorMessage = "Rejoin without the standalone stacking script to use this toggle."
-                elseif not stacking then
-                    local ok, result = pcall(installStacking)
-                    if ok then
-                        stacking = result
-                    else
-                        errorMessage = "Could not enable stacking: " .. tostring(result)
-                    end
-                end
-
-                if errorMessage then
-                    Recorder:Log(errorMessage)
-                    if stackingToggle then
-                        stackingToggle:SetValue(false)
-                    end
-                    return
-                end
-
-                stacking.enabled = true
-                Globals.StackEnabled = true
-            end,
-        })
-
         if game_state == "GAME" then
             local towers_folder = workspace_ref:WaitForChild("Towers", 5)
             if not towers_folder then return end
 
             towers_folder.ChildAdded:Connect(function(tower)
                 if not Globals.record_strat then return end
-                local stackingEnabled = Globals.StackEnabled == true or (stacking and stacking.enabled == true)
                 
                 local replicator = tower:WaitForChild("TowerReplicator", 5)
                 if not replicator or not Globals.record_strat then return end
@@ -1087,22 +974,7 @@ TDS:Mode("%s")%s
                 local raw_pos = replicator:GetAttribute("Position")
                 
                 local position = typeof(raw_pos) == "Vector3" and raw_pos or tower:GetPivot().Position
-                local stacked = false
-                for index, placement in ipairs(stackedPlacements) do
-                    if placement.tower == tower
-                        or (not placement.tower and placement.name == tower_name
-                            and (placement.raised - position).Magnitude < 0.05) then
-                        position = placement.original
-                        stacked = true
-                        table.remove(stackedPlacements, index)
-                        break
-                    end
-                end
-
-                local lineIndex, prefix = record_action(formatPlacement(tower_name, position, stacked or stackingEnabled))
-                if lineIndex and not stacked and #stackedPlacements > 0 then
-                    pendingPlacementLines[tower] = {index = lineIndex, prefix = prefix, name = tower_name}
-                end
+                record_action(formatPlacement(tower_name, position))
                 Recorder:Log("Placed " .. tower_name .. " (Index: " .. my_index .. ")")
 
             end)
