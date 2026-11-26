@@ -8,14 +8,16 @@ return {
             RequiredTowers = {
                 "Pyromancer",
                 "Shotgunner",
-                "Minigunner"
+                "Minigunner",
+                "Military Base
             },
             FarmTowers = {
                 "Pyromancer",
                 "Scout",
                 "Shotgunner",
                 "Crook Boss",
-                "Minigunner"
+                "Minigunner",
+                "Military Base"
             }
         },
         {
@@ -29,6 +31,7 @@ return {
                 {Name = "Juggernaut", GameName = "Juggernaut"},
                 {Name = "Kingpin", GameName = "Kingpin"},
                 {Name = "Enforcer", GameName = "Enforcer"}
+                {Name = "Mecha Base", GameName = "MechaBase"}                
             }
         }
     },
