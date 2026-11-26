@@ -4,6 +4,7 @@ return function(TDS, selectedTower)
         Juggernaut = "EvolvedJuggernaut",
         Kingpin = "EvolvedKingpin",
         Enforcer = "EvolvedEnforcer"
+        Mecha Base = "EvolvedMechaBase"
     }
 
     local loadoutTower =
