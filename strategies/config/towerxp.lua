@@ -28,11 +28,11 @@ return {
             },
             RequireSelectedTower = true,
             Towers = {
-                {Name = "Operator", GameName = "Operator"},
-                {Name = "Juggernaut", GameName = "Juggernaut"},
-                {Name = "Kingpin", GameName = "Kingpin"},
-                {Name = "Enforcer", GameName = "Enforcer"},
-                {Name = "Mecha Base", GameName = "MechaBase"}                
+                {Name = "Operator", GameName = "Operator", OwnedName = "EvolvedOperator"},
+                {Name = "Juggernaut", GameName = "Juggernaut", OwnedName = "EvolvedJuggernaut"},
+                {Name = "Kingpin", GameName = "Kingpin", OwnedName = "EvolvedKingpin"},
+                {Name = "Enforcer", GameName = "Enforcer", OwnedName = "EvolvedEnforcer"},
+                {Name = "Mecha Base", GameName = "MechaBase", OwnedName = "EvolvedMechaBase"}                
             }
         }
     },
