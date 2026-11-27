@@ -89,4 +89,4 @@ TDS:UpgradeTimes(11, 2)
 TDS:SetOption(11, "Track", "Red")
 TDS:UpgradeTimes(11, 3)
 
-TDS:Ability(7, "Hologram Tower", {towerPosition = Vector3.new(9.061939239501953, 4.9528303146362305, -40.38243103027344), towerToClone = 6}, true)
+TDS:Ability(7, "Hologram Tower", {towerPosition = Vector3.new(8.8069257736206055, 7.6069426536560059, -47.254783630371094), towerToClone = 6}, true)
