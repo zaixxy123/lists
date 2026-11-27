@@ -3,14 +3,15 @@ return function(TDS, selectedTower)
         Operator = "EvolvedOperator",
         Juggernaut = "EvolvedJuggernaut",
         Kingpin = "EvolvedKingpin",
-        Enforcer = "EvolvedEnforcer"
-        Mecha Base = "EvolvedMechaBase"
+        Enforcer = "EvolvedEnforcer",
+        MechaBase = "EvolvedMechaBase",
+        ["Mecha Base"] = "EvolvedMechaBase"
     }
 
     local loadoutTower =
         EvolvedLoadoutNames[selectedTower]
         or selectedTower
-TDS:Loadout("Farm", "Crook Boss", "Boomerang", "loadoutTower", "None")
+TDS:Loadout("Farm", "Crook Boss", "Boomerang", loadoutTower, "None")
 TDS:Mode("Hardcore")
 TDS:GameInfo("Wretched Front")
 TDS:VoteSkip()
