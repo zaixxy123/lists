@@ -896,6 +896,39 @@ local function GetFarm()
     return shared.AutoProgress
 end
 
+local function GetTowerXPSelection()
+    local mode = tostring(Globals.TowerXPMode or "")
+    local settingName
+
+    if mode == "Evolved Tower" or mode == "Evolved Towers" then
+        mode = "Evolved Tower"
+        settingName = "TowerXPEvolvedSelections"
+    elseif mode == "Normal Tower" or mode == "Normal Towers" then
+        mode = "Normal Tower"
+        settingName = "TowerXPNormalSelections"
+    end
+
+    local selections = settingName and Globals[settingName]
+    local multiSelection = settingName ~= nil
+    if not multiSelection and type(Globals.TowerXPSelectedTowers) == "table" then
+        selections = Globals.TowerXPSelectedTowers
+        multiSelection = true
+    end
+
+    local targets, seen = {}, {}
+    if type(selections) == "table" then
+        for _, value in ipairs(selections) do
+            local towerName = Trim(value)
+            if towerName ~= "" and not seen[towerName] then
+                seen[towerName] = true
+                targets[#targets + 1] = towerName
+                if #targets >= 2 then break end
+            end
+        end
+    end
+    return mode, targets, multiSelection
+end
+
 local function GetFarmStatus(mode)
     if mode == "auto_arcade" then
         if Globals.AutoArcadeEnabled ~= true then
@@ -956,34 +989,42 @@ local function GetFarmStatus(mode)
             return "Idle"
         end
 
-        local selectedTower =
-            tostring(
-                Globals.TowerXPSelectedTower
-                or "None"
-            )
+        local selectedTower = tostring(Globals.TowerXPSelectedTower or "None")
+        local _, selections, multiSelection = GetTowerXPSelection()
 
-        if selectedTower == ""
-            or selectedTower == "None" then
-
+        if multiSelection and #selections == 0 then
             return "Select Tower"
+        end
+        if not multiSelection and (selectedTower == "" or selectedTower == "None") then
+            return "Select Tower"
+        end
+
+        local rep = GetGameReplicator()
+        if rep and rep:GetAttribute("GameOver") == true then
+            return "Restarting Match..."
+        end
+
+        local currentTargets = ""
+        if multiSelection and type(Globals.GetTowerXPGameName) == "function" then
+            local ok, value = pcall(Globals.GetTowerXPGameName)
+            if ok then
+                currentTargets = tostring(value or "")
+                if currentTargets == "" then
+                    return "All Selected Towers at Max Level (20/20)"
+                end
+            end
         end
 
         if game.PlaceId == LOBBY_PLACE_ID then
             return "Tower XP Matchmaking..."
         end
 
-        local rep =
-            GetGameReplicator()
-
-        if rep
-            and rep:GetAttribute("GameOver") == true then
-
-            return "Restarting Match..."
-        end
-
-        return
-            "Leveling "
-            .. selectedTower
+        return "Leveling " .. (
+            multiSelection and (
+                currentTargets ~= "" and currentTargets:gsub("|", ", ")
+                or table.concat(selections, ", ")
+            ) or selectedTower
+        )
     end
 
     if mode == "story"
@@ -2563,8 +2604,8 @@ local function GetSelectedTowerXPEntries(selectedTower)
             end
         end
     end
-    local selections = Globals.TowerXPSelectedTowers
-    if type(selections) == "table" then
+    local _, selections, multiSelection = GetTowerXPSelection()
+    if multiSelection then
         for _, value in ipairs(selections) do
             if #targets >= 2 then break end
             resolve(value)
@@ -2591,7 +2632,9 @@ local function BuildTowerLevelsField(targets)
     end
 
     local ok, xp = pcall(function()
-        return require(ReplicatedStorage.Client.Modules.Cache)("TowerExp"):Get():expect()
+        local cache = require(ReplicatedStorage.Client.Modules.Cache)("TowerExp")
+        local value = type(cache.GetValue) == "function" and cache:GetValue() or nil
+        return type(value) == "table" and value or cache:Get():expect()
     end)
     if not ok or type(xp) ~= "table" then
         return "Unavailable"
@@ -2604,7 +2647,10 @@ local function BuildTowerLevelsField(targets)
 
     local lines = {}
     for _, tower in ipairs(targets) do
-        local exp = tonumber(xp[tower.Key]) or tonumber(normalizedXP[normalize(tower.Key)]) or 0
+        local exp = tonumber(xp[tower.Key]) or tonumber(normalizedXP[normalize(tower.Key)])
+        if exp == nil then
+            lines[#lines + 1] = "┃ " .. tower.Name .. ": **Unavailable**"
+        else
         local level, required = 0, 0
         for i = 1, 20 do
             required += math.floor(75 * 1.075 ^ (i - 1))
@@ -2614,6 +2660,7 @@ local function BuildTowerLevelsField(targets)
         lines[#lines + 1] = "┃ " .. tower.Name .. ": **"
             .. (level == 20 and "MAX LEVEL" or tostring(level) .. "/20")
             .. "**"
+        end
     end
     return table.concat(lines, "\n")
 end
