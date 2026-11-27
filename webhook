@@ -3240,9 +3240,9 @@ local function BuildEmbed(
     return {
         title = title,
         description =
-            "**"
+            "||"
             .. LocalPlayer.Name
-            .. "**",
+            .. "||",
         color = EMBED_COLOR,
         fields = fields,
         footer = {
