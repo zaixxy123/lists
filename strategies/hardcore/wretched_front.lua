@@ -1,4 +1,4 @@
-TDS:Loadout("Farm", "Crook Boss", "Boomerang", "None", "None")
+TDS:Loadout("Pyromancer")
 TDS:Mode("Hardcore")
 TDS:GameInfo("Wretched Front")
 TDS:Place("Pyromancer", -5.936307430267334, 0.9551397562026978, -31.831748962402344)
