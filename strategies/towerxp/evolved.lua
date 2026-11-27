@@ -10,7 +10,7 @@ return function(TDS, selectedTower)
     local loadoutTower =
         EvolvedLoadoutNames[selectedTower]
         or selectedTower
-TDS:Loadout("Farm", "Crook Boss", "Boomerang", "None", "None")
+TDS:Loadout("Farm", "Crook Boss", "Boomerang", "loadoutTower", "None")
 TDS:Mode("Hardcore")
 TDS:GameInfo("Wretched Front")
 TDS:VoteSkip()
