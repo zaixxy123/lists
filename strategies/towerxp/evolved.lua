@@ -6,24 +6,54 @@ return function(TDS, selectedTower)
     if not chunk then
         error("[TOWER XP] Config compile failed: " .. tostring(compileError))
     end
-
     local config = chunk()
-    local loadoutTower
+    local known = {}
     for _, mode in ipairs(config.Modes or {}) do
         if mode.Name == "Evolved Towers" then
             for _, tower in ipairs(mode.Towers or {}) do
-                if tower.Name == selectedTower or tower.GameName == selectedTower then
-                    loadoutTower = tower.OwnedName or tower.GameName
-                    break
-                end
+                local value = tower.OwnedName or tower.GameName
+                known[tower.Name] = value
+                known[tower.GameName] = value
+                known[value] = value
+            end
+        elseif mode.Name == "Normal Towers" or mode.Name == "All Normal Tower" then
+            for _, name in ipairs(mode.LevelTowers or {}) do
+                known[name] = name
             end
         end
     end
 
-    if not loadoutTower then
+    local targets = {}
+    if type(selectedTower) == "table" then
+        targets = selectedTower
+    else
+        for tower in tostring(selectedTower or ""):gmatch("[^|]+") do
+            targets[#targets + 1] = tower:match("^%s*(.-)%s*$")
+        end
+    end
+
+    -- The first three slots are fixed by the strategy. Never equip a selected
+    -- tower a second time if it is already present (especially Crook Boss).
+    local equipped = {Farm = true, ["Crook Boss"] = true, Boomerang = true}
+    local extras = {}
+    local validTarget = false
+    for _, selected in ipairs(targets) do
+        local gameTower = known[selected]
+        if gameTower then
+            validTarget = true
+            if not equipped[gameTower] and #extras < 2 then
+                equipped[gameTower] = true
+                extras[#extras + 1] = gameTower
+            end
+        end
+    end
+    if not validTarget then
         return false
     end
-TDS:Loadout("Farm", "Crook Boss", "Boomerang", loadoutTower, "None")
+    local loadoutTower = extras[1] or "None"
+    local loadoutTower2 = extras[2] or "None"
+
+TDS:Loadout("Farm", "Crook Boss", "Boomerang", loadoutTower, loadoutTower2)
 TDS:Mode("Hardcore")
 TDS:GameInfo("Wretched Front")
 TDS:VoteSkip()
@@ -136,7 +166,12 @@ TDS:Upgrade(17)
 
 -- [ Wave 22 ] --
 TDS:Upgrade(12)
-TDS:Place(loadoutTower, -4.1622934341430664, 1.492003321647644, 29.184486389160156)
+if loadoutTower ~= "None" then
+    TDS:Place(loadoutTower, -4.1622934341430664, 1.492003321647644, 29.184486389160156)
+end
+if loadoutTower2 ~= "None" then
+    TDS:Place(loadoutTower2, -0.30316638946533203, 1.4612576961517334, 31.492918014526367)
+end
 
     return true
 end
