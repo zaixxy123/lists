@@ -1,16 +1,28 @@
 return function(TDS, selectedTower)
-    local EvolvedLoadoutNames = {
-        Operator = "EvolvedOperator",
-        Juggernaut = "EvolvedJuggernaut",
-        Kingpin = "EvolvedKingpin",
-        Enforcer = "EvolvedEnforcer",
-        MechaBase = "EvolvedMechaBase",
-        ["Mecha Base"] = "EvolvedMechaBase"
-    }
+    local source = game:HttpGet(
+        "https://raw.githubusercontent.com/zaixxy123/lists/refs/heads/main/strategies/config/towerxp.lua?cache=" .. tostring(os.clock())
+    )
+    local chunk, compileError = loadstring(source)
+    if not chunk then
+        error("[TOWER XP] Config compile failed: " .. tostring(compileError))
+    end
 
-    local loadoutTower =
-        EvolvedLoadoutNames[selectedTower]
-        or selectedTower
+    local config = chunk()
+    local loadoutTower
+    for _, mode in ipairs(config.Modes or {}) do
+        if mode.Name == "Evolved Towers" then
+            for _, tower in ipairs(mode.Towers or {}) do
+                if tower.Name == selectedTower or tower.GameName == selectedTower then
+                    loadoutTower = tower.OwnedName or tower.GameName
+                    break
+                end
+            end
+        end
+    end
+
+    if not loadoutTower then
+        return false
+    end
 TDS:Loadout("Farm", "Crook Boss", "Boomerang", loadoutTower, "None")
 TDS:Mode("Hardcore")
 TDS:GameInfo("Wretched Front")
