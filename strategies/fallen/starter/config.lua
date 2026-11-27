@@ -13,8 +13,8 @@ return {
         "Soldier"
     },
     Priority = {
-        "Construction Crazy",
         "Cataclysm",
+        "Construction Crazy",
         "Retro The Heights",
         "Forgetten Docks"
     },
