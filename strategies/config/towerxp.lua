@@ -31,6 +31,7 @@ return {
             Name = "Evolved Towers",
             RequiredTowers = {
                 "Farm",
+                "Crook Boss",
                 "Boomerang"
             },
             RequireSelectedTower = true,
