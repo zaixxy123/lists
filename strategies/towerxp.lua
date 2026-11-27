@@ -10,6 +10,8 @@ return function(TDS, selectedTower)
     local filename = selectedTower == "All Normal Tower"
         and "normal.lua"
         or "evolved.lua"
+    -- Multi-select targets are pipe-delimited; the evolved script supports
+    -- both normal and evolved towers in the final two loadout slots.
 
     local source = game:HttpGet(ROOT .. filename .. "?cache=" .. tostring(os.clock()))
     local chunk, compileError = loadstring(source)
