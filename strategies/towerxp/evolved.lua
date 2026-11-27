@@ -167,10 +167,10 @@ TDS:Upgrade(17)
 -- [ Wave 22 ] --
 TDS:Upgrade(12)
 if loadoutTower ~= "None" then
-    TDS:Place(loadoutTower, -4.1622934341430664, 1.492003321647644, 29.184486389160156)
+    TDS:Place(loadoutTower, -2.9802374839782715, 0.986655592918396, -32.875785827636719)
 end
 if loadoutTower2 ~= "None" then
-    TDS:Place(loadoutTower2, -0.30316638946533203, 1.4612576961517334, 31.492918014526367)
+    TDS:Place(loadoutTower2, -9.3328819274902344, 0.98418515920639038, -31.453096389770508)
 end
 
     return true
