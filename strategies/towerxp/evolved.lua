@@ -123,7 +123,7 @@ TDS:Upgrade(17)
 
 -- [ Wave 22 ] --
 TDS:Upgrade(12)
-TDS:Place(loadoutTower, -5.1009721755981445, -0.080512046813964844, -9.5659475326538086)
+TDS:Place(loadoutTower, -4.1622934341430664, 1.492003321647644, 29.184486389160156)
 
     return true
 end
