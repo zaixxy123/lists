@@ -1897,55 +1897,6 @@ local function FormatTarget(target)
     return first
 end
 
-local function GetTowerXPLevel()
-    local inventory =
-        PlayerGui:FindFirstChild(
-            "ReactUniversalInventoryView"
-        )
-
-    local holder =
-        inventory
-        and inventory:FindFirstChild("Holder")
-
-    local buttons =
-        holder
-        and holder:FindFirstChild("Buttons")
-
-    local towerLevel =
-        buttons
-        and buttons:FindFirstChild(
-            "towerLevel"
-        )
-
-    local content =
-        towerLevel
-        and towerLevel:FindFirstChild(
-            "content"
-        )
-
-    local currentLevel =
-        content
-        and content:FindFirstChild(
-            "currentLevel"
-        )
-
-    local level =
-        currentLevel
-        and ReadNumberObject(currentLevel)
-        or nil
-
-    if level ~= nil then
-        Globals.WebhookTowerXPLevel =
-            level
-    end
-
-    return level
-        or tonumber(
-            Globals.WebhookTowerXPLevel
-        )
-        or 0
-end
-
 local function GetStoryInfo()
     local story =
         type(StrategyConfig.Story) == "table"
@@ -2268,11 +2219,6 @@ local function BuildAutoMaxEmbed(
             .. status
             .. "**\n┃ Current Level: **"
             .. FormatNumber(snapshot.Level)
-            .. "**\n┃ Starting Level: **"
-            .. FormatNumber(
-                Session.StartingLevel
-                or snapshot.Level
-            )
             .. "**",
         false
     )
@@ -2335,11 +2281,6 @@ local function BuildGatlingEmbed(
             )
             .. "**\n┃ Current Level: **"
             .. FormatNumber(snapshot.Level)
-            .. "**\n┃ Starting Level: **"
-            .. FormatNumber(
-                Session.StartingLevel
-                or snapshot.Level
-            )
             .. "**\n┃ Gatling Gun: **"
             .. (
                 snapshot.GatlingOwned
@@ -2387,21 +2328,7 @@ local function BuildGatlingEmbed(
         BuildCurrencyBalanceField(
             snapshot,
             false
-        )
-            .. "\nLevels Gained: **+"
-            .. FormatNumber(
-                math.max(
-                    snapshot.Level
-                    - (
-                        tonumber(
-                            Session.StartingLevel
-                        )
-                        or snapshot.Level
-                    ),
-                    0
-                )
-            )
-            .. "**",
+        ),
         true
     )
 
@@ -2607,6 +2534,66 @@ local function GetTowerXPFarmTargets(selectedTower)
     return {}
 end
 
+local function BuildTowerLevelsField(selectedTower)
+    local config = StrategyConfig.TowerXP or {}
+    local targets = {}
+    local function normalize(value)
+        return tostring(value or ""):lower():gsub("[^%w]", "")
+    end
+    local selected = normalize(selectedTower)
+
+    for _, mode in ipairs(config.Modes or {}) do
+        if selected == normalize(mode.GameName or mode.Name) then
+            for _, name in ipairs(mode.LevelTowers or {}) do
+                targets[#targets + 1] = {Name = name, Key = name}
+            end
+        end
+        for _, tower in ipairs(mode.Towers or {}) do
+            if selected ~= "" and (
+                selected == normalize(tower.Name)
+                or selected == normalize(tower.GameName)
+                or selected == normalize(tower.OwnedName)
+            ) then
+                targets[#targets + 1] = {
+                    Name = tower.Name or tower.GameName,
+                    Key = tower.OwnedName or tower.GameName or tower.Name
+                }
+            end
+        end
+    end
+
+    if #targets == 0 then
+        return "Unavailable"
+    end
+
+    local ok, xp = pcall(function()
+        return require(ReplicatedStorage.Client.Modules.Cache)("TowerExp"):Get():expect()
+    end)
+    if not ok or type(xp) ~= "table" then
+        return "Unavailable"
+    end
+
+    local normalizedXP = {}
+    for key, value in pairs(xp) do
+        normalizedXP[normalize(key)] = value
+    end
+
+    local lines = {}
+    for _, tower in ipairs(targets) do
+        local exp = tonumber(xp[tower.Key]) or tonumber(normalizedXP[normalize(tower.Key)]) or 0
+        local level, required = 0, 0
+        for i = 1, 20 do
+            required += math.floor(75 * 1.075 ^ (i - 1))
+            if exp < required then break end
+            level = i
+        end
+        lines[#lines + 1] = "┃ " .. tower.Name .. ": **"
+            .. (level == 20 and "MAX LEVEL" or tostring(level) .. "/20")
+            .. "**"
+    end
+    return table.concat(lines, "\n")
+end
+
 local function BuildTowerXPEmbed(
     snapshot,
     data
@@ -2651,6 +2638,9 @@ local function BuildTowerXPEmbed(
         .. "**\n┃ Mode: **"
         .. selectedTower
         .. "**"
+        .. "\n┃ Current Account Level: **"
+        .. FormatNumber(snapshot.Level)
+        .. "**"
 
     if #farmTargets > 0 then
         overview =
@@ -2667,6 +2657,13 @@ local function BuildTowerXPEmbed(
         fields,
         "📋 Tower Overview",
         overview,
+        false
+    )
+
+    AddField(
+        fields,
+        "📊 Current Tower Levels",
+        BuildTowerLevelsField(selectedTower),
         false
     )
 
