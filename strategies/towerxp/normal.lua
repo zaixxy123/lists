@@ -1,5 +1,7 @@
 return function(TDS)
 TDS:Loadout("Pyromancer")
+TDS:Mode("Hardcore")
+TDS:GameInfo("Wretched Front")
 TDS:Place("Pyromancer", -5.936307430267334, 0.9551397562026978, -31.831748962402344)
 TDS:Loadout("Scout", "Crook Boss", "Shotgunner", "Military Base", "Minigunner")
 TDS:Ready()
