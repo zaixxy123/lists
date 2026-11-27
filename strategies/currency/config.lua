@@ -28,16 +28,16 @@ return {
 
             Maps = {
                 ["Wrecked Battlefield II"] =
-                    "strategies/currency/coins/lose/wrecked_battlefield_ii.lua",
+                    "strategies/molten/wrecked_battlefield_ii.lua",
 
                 ["Lighthaos"] =
-                    "strategies/currency/coins/lose/lighthaos.lua",
+                    "strategies/molten/lighthaos.lua",
 
                 ["Midnight Issue"] =
-                    "strategies/currency/coins/lose/midnight_issue.lua",
+                    "strategies/molten/midnight_issue.lua",
 
                 ["Nether"] =
-                    "strategies/currency/coins/lose/nether.lua"
+                    "strategies/molten/nether.lua"
             }
         }
     },
