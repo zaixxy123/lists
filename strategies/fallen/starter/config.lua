@@ -14,13 +14,13 @@ return {
     },
     Priority = {
         "Construction Crazy",
-        "The Heights",
+        "Cataclysm",
         "Retro The Heights",
         "Forgetten Docks"
     },
     Maps = {
         ["Construction Crazy"] = "strategies/fallen/starter/construction_crazy.lua",
-        ["The Heights"] = "strategies/fallen/starter/the_heights.lua",
+        ["Cataclysm"] = "strategies/fallen/starter/cataclysm.lua",
         ["Retro The Heights"] = "strategies/fallen/starter/retro_the_heights.lua",
         ["Forgetten Docks"] = "strategies/fallen/starter/forgetten_docks.lua"
     }
