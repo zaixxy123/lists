@@ -223,6 +223,50 @@ local function ReadDirectStat(name)
     return nil
 end
 
+local ExperienceNeeded
+local function GetLevelFromExperience()
+    local levelValue = LocalPlayer:FindFirstChild("Level")
+    local experienceValue = LocalPlayer:FindFirstChild("Experience")
+    if not levelValue or not experienceValue then
+        return nil
+    end
+
+    local level = tonumber(levelValue.Value)
+    local xp = tonumber(experienceValue.Value)
+    if not level or level < 0 or not xp or xp < 0 then
+        return nil
+    end
+
+    if not ExperienceNeeded then
+        local sharedFolder = ReplicatedStorage:FindFirstChild("Shared")
+        local modules = sharedFolder and sharedFolder:FindFirstChild("Modules")
+        local module = modules and modules:FindFirstChild("Experience")
+        if not module then
+            return nil
+        end
+        local ok, result = pcall(require, module)
+        if not ok or type(result) ~= "function" then
+            return nil
+        end
+        ExperienceNeeded = result
+    end
+
+    level = math.floor(level)
+    for _ = 1, 1000 do
+        local ok, needed = pcall(ExperienceNeeded, level)
+        needed = ok and tonumber(needed) or nil
+        if not needed or needed <= 0 then
+            return nil
+        end
+        if xp < needed then
+            break
+        end
+        xp -= needed
+        level += 1
+    end
+    return level
+end
+
 local function GetProgressSnapshot()
     local snapshot = {}
     local stats = shared.AutoProgressStats
@@ -240,6 +284,21 @@ local function GetProgressSnapshot()
             for key, value in pairs(result) do
                 snapshot[key] = value
             end
+        end
+    end
+
+    if game.PlaceId ~= LOBBY_PLACE_ID then
+        local rep = GetGameReplicator()
+        if rep and rep:GetAttribute("GameOver") == true then
+            local experienceLevel = GetLevelFromExperience()
+            if experienceLevel ~= nil then
+                snapshot.Level = experienceLevel
+            end
+        end
+    else
+        local liveLevel = ReadDirectStat("Level")
+        if liveLevel ~= nil and liveLevel >= 0 then
+            snapshot.Level = liveLevel
         end
     end
 
@@ -412,20 +471,24 @@ local function GetRewardScreenLevel()
 end
 
 local function GetCurrentLevel()
-    local rewardLevel =
-        GetRewardScreenLevel()
-
-    if rewardLevel
-        and rewardLevel > 0 then
-
-        return rewardLevel
+    if game.PlaceId ~= LOBBY_PLACE_ID then
+        local rep = GetGameReplicator()
+        if rep and rep:GetAttribute("GameOver") == true then
+            local experienceLevel = GetLevelFromExperience()
+            if experienceLevel ~= nil then
+                return experienceLevel
+            end
+        end
     end
 
-    local snapshot =
-        GetProgressSnapshot()
-
+    local snapshot = GetProgressSnapshot()
     if snapshot.Level > 0 then
         return snapshot.Level
+    end
+
+    local rewardLevel = GetRewardScreenLevel()
+    if rewardLevel and rewardLevel > 0 then
+        return rewardLevel
     end
 
     return nil
