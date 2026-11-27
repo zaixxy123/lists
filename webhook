@@ -2534,32 +2534,56 @@ local function GetTowerXPFarmTargets(selectedTower)
     return {}
 end
 
-local function BuildTowerLevelsField(selectedTower)
+local function GetSelectedTowerXPEntries(selectedTower)
     local config = StrategyConfig.TowerXP or {}
-    local targets = {}
+    local targets, seen = {}, {}
     local function normalize(value)
         return tostring(value or ""):lower():gsub("[^%w]", "")
     end
+    local function add(name, key)
+        local id = normalize(key)
+        if id ~= "" and not seen[id] then
+            seen[id] = true
+            targets[#targets + 1] = {Name = name, Key = key}
+        end
+    end
+    local function resolve(value)
+        local selected = normalize(value)
+        if selected == "" then return end
+        for _, mode in ipairs(config.Modes or {}) do
+            for _, name in ipairs(mode.LevelTowers or {}) do
+                if selected == normalize(name) then add(name, name) end
+            end
+            for _, tower in ipairs(mode.Towers or {}) do
+                if selected == normalize(tower.Name)
+                    or selected == normalize(tower.GameName)
+                    or selected == normalize(tower.OwnedName) then
+                    add(tower.Name or tower.GameName, tower.OwnedName or tower.GameName or tower.Name)
+                end
+            end
+        end
+    end
+    local selections = Globals.TowerXPSelectedTowers
+    if type(selections) == "table" then
+        for _, value in ipairs(selections) do
+            if #targets >= 2 then break end
+            resolve(value)
+        end
+        return targets, true
+    end
     local selected = normalize(selectedTower)
-
     for _, mode in ipairs(config.Modes or {}) do
         if selected == normalize(mode.GameName or mode.Name) then
-            for _, name in ipairs(mode.LevelTowers or {}) do
-                targets[#targets + 1] = {Name = name, Key = name}
-            end
+            for _, name in ipairs(mode.LevelTowers or {}) do add(name, name) end
         end
-        for _, tower in ipairs(mode.Towers or {}) do
-            if selected ~= "" and (
-                selected == normalize(tower.Name)
-                or selected == normalize(tower.GameName)
-                or selected == normalize(tower.OwnedName)
-            ) then
-                targets[#targets + 1] = {
-                    Name = tower.Name or tower.GameName,
-                    Key = tower.OwnedName or tower.GameName or tower.Name
-                }
-            end
-        end
+    end
+    resolve(selectedTower)
+    return targets, false
+end
+
+local function BuildTowerLevelsField(targets)
+    local function normalize(value)
+        return tostring(value or ""):lower():gsub("[^%w]", "")
     end
 
     if #targets == 0 then
@@ -2608,13 +2632,18 @@ local function BuildTowerXPEmbed(
             or "None"
         )
 
-    local farmTargets =
-        GetTowerXPFarmTargets(
-            selectedTower
-        )
+    local levelTargets, multiSelection = GetSelectedTowerXPEntries(selectedTower)
+    local farmTargets = {}
+    if multiSelection then
+        for _, tower in ipairs(levelTargets) do
+            farmTargets[#farmTargets + 1] = tower.Name
+        end
+    else
+        farmTargets = GetTowerXPFarmTargets(selectedTower)
+    end
 
     local isMultiTowerFarm =
-        #farmTargets > 1
+        not multiSelection and #farmTargets > 1
 
     local title
 
@@ -2636,7 +2665,7 @@ local function BuildTowerXPEmbed(
             "tower_xp"
         )
         .. "**\n┃ Mode: **"
-        .. selectedTower
+        .. (multiSelection and tostring(Globals.TowerXPMode or selectedTower) or selectedTower)
         .. "**"
         .. "\n┃ Current Account Level: **"
         .. FormatNumber(snapshot.Level)
@@ -2663,7 +2692,7 @@ local function BuildTowerXPEmbed(
     AddField(
         fields,
         "📊 Current Tower Levels",
-        BuildTowerLevelsField(selectedTower),
+        BuildTowerLevelsField(levelTargets),
         false
     )
 
