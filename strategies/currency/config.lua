@@ -20,9 +20,9 @@ return {
             },
 
             Priority = {
+                "Midnight Issue",
                 "Wrecked Battlefield II",
                 "Lighthaos",
-                "Midnight Issue",
                 "Nether"
             },
 
