@@ -5,14 +5,6 @@ return {
     AutoFarmUntilGatling = {
         TargetTower = "Gatling Gun",
 
-        Win = {
-            RoutePriority = {
-                "Casual",
-                "Easy.Win",
-                "Easy.Starter"
-            }
-        },
-
         Lose = {
             GrindRules = {
                 {
@@ -43,11 +35,6 @@ return {
     },
 
     AutoBuyAllTowers = {
-        Win = {
-            UseWinRoutePriority = true,
-            GemRoute = "Hardcore"
-        },
-
         Lose = {
             CoinRoute = "Molten",
             GemRoute = "Hardcore"

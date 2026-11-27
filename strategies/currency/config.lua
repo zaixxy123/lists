@@ -1,52 +1,9 @@
 -- Currency farm configuration.
--- Coins Win uses Casual strategies.
 -- Coins Lose uses Molten strategies.
 -- Gems Lose uses Hardcore strategies.
 
 return {
     Coins = {
-        Win = {
-            RouteKey = "Currency.Coins.Win",
-            MatchTimeoutMinutes = 15,
-            GameOverAction = "Rematch",
-            Matchmaking = {
-                Difficulty = "Casual",
-                Type = "survival"
-            },
-            RequiredTowers = {
-                "Militant",
-                "Commander",
-                "Assassin"
-            },
-            Priority = {
-                "Lay By",
-                "Dead Ahead",
-                "ason Arch",
-                "Black Spot Exchange",
-                "Construction Crazy",
-                "Forgetten Docks"
-            },
-            Maps = {
-                ["ason Arch"] =
-                    "strategies/currency/coins/win/mason_arch.lua",
-
-                ["Dead Ahead"] =
-                    "strategies/currency/coins/win/dead_ahead.lua",
-
-                ["Lay By"] =
-                    "strategies/currency/coins/win/lay_by.lua",
-
-                ["Black Spot Exchange"] =
-                    "strategies/currency/coins/win/black_spot_exchange.lua",
-
-                ["Construction Crazy"] =
-                    "strategies/currency/coins/win/construction_crazy.lua",
-
-                ["Forgetten Docks"] =
-                    "strategies/currency/coins/win/forgetten_docks.lua"
-            }
-        },
-
         Lose = {
             RouteKey = "Currency.Coins.Lose",
             MatchTimeoutMinutes = 15,

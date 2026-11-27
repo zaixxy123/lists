@@ -99,9 +99,6 @@ return {
     Easy =
         LoadConfig("easy/config.lua"),
 
-    Casual =
-        LoadConfig("casual/config.lua"),
-
     Molten =
         LoadConfig("molten/config.lua"),
 
