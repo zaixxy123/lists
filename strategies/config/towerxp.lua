@@ -11,6 +11,13 @@ return {
                 "Minigunner",
                 "Military Base"
             },
+            LevelTowers = {
+                "Military Base",
+                "Scout",
+                "Shotgunner",
+                "Crook Boss",
+                "Minigunner"
+            },
             FarmTowers = {
                 "Pyromancer",
                 "Scout",
