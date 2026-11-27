@@ -21,14 +21,14 @@ return {
 
             Priority = {
                 "Midnight Issue",
-                "Wrecked Battlefield II",
+                "Farm Lands",
                 "Lighthaos",
                 "Nether"
             },
 
             Maps = {
-                ["Wrecked Battlefield II"] =
-                    "strategies/molten/wrecked_battlefield_ii.lua",
+                ["Farm Lands"] =
+                    "strategies/molten/farm_lands.lua",
 
                 ["Lighthaos"] =
                     "strategies/molten/lighthaos.lua",
