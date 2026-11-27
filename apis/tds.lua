@@ -486,22 +486,96 @@ return function(Context)
         )
     end
 
-    local function BuildMatchmakingPayload(
-        difficulty
-    )
-        difficulty =
-            tostring(
-                difficulty or ""
-            )
+    local function BuildMatchmakingPayload(difficulty)
+        difficulty = tostring(difficulty or "")
+        local cleanQuery = string.lower(difficulty):gsub("%s+", ""):gsub("[%-_]", "")
 
-        if difficulty == "Trial" then
-            return {
-                count = 1,
-                mode = "Trials"
-            }
+        local mmFolder = ReplicatedStorage:FindFirstChild("Client")
+            and ReplicatedStorage.Client:FindFirstChild("Interfaces")
+            and ReplicatedStorage.Client.Interfaces:FindFirstChild("Lobby")
+            and ReplicatedStorage.Client.Interfaces.Lobby:FindFirstChild("Components")
+            and ReplicatedStorage.Client.Interfaces.Lobby.Components:FindFirstChild("NewMatchmaking")
+
+        if not mmFolder then
+            return { count = 1, mode = "survival", difficulty = difficulty ~= "" and difficulty or nil }
         end
 
-        return nil
+        local MatchmakingModel = require(mmFolder.MatchmakingModel)
+        local TrialDataMod = mmFolder:FindFirstChild("MatchmakingTrialData")
+
+        -- 1. Gather all registered game modes from MatchmakingModel
+        local allEntries = {}
+        for _, modes in pairs(MatchmakingModel.MODE_GROUPS) do
+            for _, entry in ipairs(modes) do
+                table.insert(allEntries, entry)
+            end
+        end
+
+        -- 2. Include live rotating Trial safely WITHOUT calling UI asset loaders
+        if TrialDataMod then
+            local ok, TD = pcall(require, TrialDataMod)
+            if ok and type(TD) == "table" then
+                local rotOk, rot = pcall(TD.getCurrentRotation)
+                local trialName = (rotOk and type(rot) == "table" and rot.trialName) or "Trial"
+                table.insert(allEntries, {
+                    id = "trial",
+                    title = trialName,
+                    tag = "Trial",
+                    queue = {
+                        mode = "Trials",
+                        requirements = {
+                            maxPartySize = 4,
+                            minLevel = 40
+                        }
+                    }
+                })
+            end
+        end
+
+        -- 3. Exact & Normalized Match
+        for _, entry in ipairs(allEntries) do
+            local q = entry.queue or {}
+            local id = string.lower(entry.id or ""):gsub("%s+", ""):gsub("[%-_]", "")
+            local title = string.lower(entry.title or ""):gsub("%s+", ""):gsub("[%-_]", "")
+            local diff = string.lower(q.difficulty or ""):gsub("%s+", ""):gsub("[%-_]", "")
+            local mode = string.lower(q.mode or ""):gsub("%s+", ""):gsub("[%-_]", "")
+            local tag = string.lower(entry.tag or ""):gsub("%s+", ""):gsub("[%-_]", "")
+
+            if diff == cleanQuery or title == cleanQuery or id == cleanQuery or mode == cleanQuery or tag == cleanQuery then
+                return {
+                    count = 1,
+                    mode = q.mode,
+                    difficulty = q.difficulty,
+                    night = q.night
+                }
+            end
+        end
+
+        -- 4. Fuzzy Substring Match (handles "Badlands", "PollutedWasteland", "Act4", etc.)
+        for _, entry in ipairs(allEntries) do
+            local q = entry.queue or {}
+            local id = string.lower(entry.id or ""):gsub("%s+", ""):gsub("[%-_]", "")
+            local title = string.lower(entry.title or ""):gsub("%s+", ""):gsub("[%-_]", "")
+            local diff = string.lower(q.difficulty or ""):gsub("%s+", ""):gsub("[%-_]", "")
+
+            if string.find(id, cleanQuery, 1, true) or string.find(title, cleanQuery, 1, true)
+                or string.find(cleanQuery, id, 1, true) or string.find(cleanQuery, title, 1, true)
+                or (diff ~= "" and string.find(diff, cleanQuery, 1, true)) then
+                return {
+                    count = 1,
+                    mode = q.mode,
+                    difficulty = q.difficulty,
+                    night = q.night
+                }
+            end
+        end
+
+        -- 5. Safe Fallback
+        return {
+            count = 1,
+            mode = "survival",
+            difficulty = difficulty ~= "" and difficulty or nil
+        }
     end
 
     function TDS:Mode(difficulty)
