@@ -38,7 +38,6 @@ return {
         "Broke",
         "SpeedyEnemies",
         "Quarantine",
-        "Inflation",
         "JailedTowers"
     },
 
