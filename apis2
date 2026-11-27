@@ -17,13 +17,7 @@ local LOBBY_PLACE_ID = 3260590327
 local TDS = {
     PlacedTowers = {},
     StackCounts = {},
-    MatchmakingMap = {
-        ["PizzaParty"] = "halloween",
-        ["Badlands"] = "badlands",
-        ["PollutedWasteland"] = "polluted",
-        ["DuckyEasy"] = "ducky2025",
-        ["DuckyHard"] = "ducky2025"
-    }
+    MatchmakingMap = {}
 }
 
 TDS.placed_towers = TDS.PlacedTowers
@@ -353,7 +347,6 @@ local function WaitForRequestedMapWithFallback(
             mapName or ""
         )
 
-    -- Let the boards finish populating first.
     task.wait(1)
 
     local selectedMap =
@@ -365,13 +358,10 @@ local function WaitForRequestedMapWithFallback(
         return selectedMap, false
     end
 
-    -- VIP/private servers can directly override to the requested map.
     if CanOverrideMap() then
         return mapName, false
     end
 
-    -- Requested map is not on the boards:
-    -- veto once and check the refreshed boards again.
     re:FireServer(
         "LobbyVoting",
         "Veto"
@@ -388,8 +378,6 @@ local function WaitForRequestedMapWithFallback(
         return selectedMap, false
     end
 
-    -- Still missing after the veto, so matchmake again
-    -- using the mode saved by TDS:Mode().
     if StartMatchmakingPayload(
         matchmaking
     ) then
@@ -1113,8 +1101,6 @@ function TDS:Place(towerName, x, y, z, ...)
     if isStacking then
         local baseY = tonumber(y) or 0
 
-        
-        
         if math.abs(baseY) < 0.001 then
             local rayParams = RaycastParams.new()
             rayParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -1169,7 +1155,6 @@ function TDS:Place(towerName, x, y, z, ...)
         end
     end
 
-    
     while IsStrategyRuntimeEnabled() do
         local gameStateReplicator = GetDirectGameStateReplicator()
 
@@ -1373,7 +1358,6 @@ local function GetSupportTowers(
     return result
 end
 
--- The Commander chain uses server time and the live ability-ammo store.
 local CommanderChainModules
 local function GetCommanderChainModules()
     if CommanderChainModules then return CommanderChainModules end
@@ -1639,7 +1623,6 @@ function TDS:AutoChain()
     return true
 end
 
-
 local NecroAutoRunning = false
 local function GetNecroGraves(rep)
     local store = rep and rep:FindFirstChild("GraveStone")
@@ -1662,6 +1645,7 @@ local function GetNecroGraves(rep)
     end
     return count, max
 end
+
 local function StartAutoNecromancer()
     if NecroAutoRunning or not TDS.HasNecromancer then return end
     NecroAutoRunning = true
@@ -1696,6 +1680,7 @@ local function StartAutoNecromancer()
         NecroAutoRunning = false
     end)
 end
+
 function TDS:AutoNecro()
     self.HasNecromancer = true
     StartAutoNecromancer()
@@ -1808,80 +1793,98 @@ task.spawn(function()
     end
 end)
 
-local function BuildMatchmakingPayload(
-    difficulty
-)
-    difficulty =
-        tostring(
-            difficulty or ""
-        )
+-- =========================================================================
+-- DYNAMIC MATCHMAKING RESOLVER (ZERO HARDCODING - AUTO-UPDATING)
+-- =========================================================================
+local function BuildMatchmakingPayload(difficulty)
+    difficulty = tostring(difficulty or "")
+    local cleanQuery = string.lower(difficulty):gsub("%s+", ""):gsub("[%-_]", "")
 
-    if difficulty == "Trial" then
-        return {
-            count = 1,
-            mode = "Trials"
-        }
+    local mmFolder = ReplicatedStorage:FindFirstChild("Client")
+        and ReplicatedStorage.Client:FindFirstChild("Interfaces")
+        and ReplicatedStorage.Client.Interfaces:FindFirstChild("Lobby")
+        and ReplicatedStorage.Client.Interfaces.Lobby:FindFirstChild("Components")
+        and ReplicatedStorage.Client.Interfaces.Lobby.Components:FindFirstChild("NewMatchmaking")
+
+    if not mmFolder then
+        return { count = 1, mode = "survival", difficulty = difficulty ~= "" and difficulty or nil }
     end
 
-    -- Halloween 2026 Acts 1-4; night always matches the selected act.
-    -- Supports both Hard (ActN) and Easy (ActNEasy).
-    local actNumber =
-        difficulty:match("^Act([1-4])$")
-        or difficulty:match("^Act([1-4])Easy$")
+    local MatchmakingModel = require(mmFolder.MatchmakingModel)
+    local TrialDataMod = mmFolder:FindFirstChild("MatchmakingTrialData")
 
-    if actNumber then
-        return {
-            difficulty = difficulty,
-            night = tonumber(actNumber),
-            count = 1,
-            mode = "halloween2026"
-        }
-    end
-
-    local mappedMode =
-        TDS.MatchmakingMap[
-            difficulty
-        ]
-
-    if difficulty == "Hardcore" then
-        return {
-            mode = "hardcore",
-            difficulty = "Easy",
-            count = 1
-        }
-    end
-
-    if difficulty == "Voidcore" then
-        return {
-            mode = "hardcore",
-            difficulty = "Hard",
-            count = 1
-        }
-    end
-
-    if mappedMode then
-        local payload = {
-            mode = mappedMode,
-            count = 1
-        }
-
-        if difficulty:match(
-            "^Ducky"
-        ) then
-            payload.difficulty =
-                difficulty:gsub(
-                    "^Ducky",
-                    ""
-                )
+    -- 1. Gather all registered game modes from MatchmakingModel
+    local allEntries = {}
+    for _, modes in pairs(MatchmakingModel.MODE_GROUPS) do
+        for _, entry in ipairs(modes) do
+            table.insert(allEntries, entry)
         end
-
-        return payload
     end
 
+    -- 2. Include live rotating Trial safely WITHOUT calling UI asset loaders
+    if TrialDataMod then
+        local ok, TD = pcall(require, TrialDataMod)
+        if ok and type(TD) == "table" then
+            local rotOk, rot = pcall(TD.getCurrentRotation)
+            local trialName = (rotOk and type(rot) == "table" and rot.trialName) or "Trial"
+            table.insert(allEntries, {
+                id = "trial",
+                title = trialName,
+                tag = "Trial",
+                queue = {
+                    mode = "Trials",
+                    requirements = {
+                        maxPartySize = 4,
+                        minLevel = 40
+                    }
+                }
+            })
+        end
+    end
+
+    -- 3. Exact & Normalized Match
+    for _, entry in ipairs(allEntries) do
+        local q = entry.queue or {}
+        local id = string.lower(entry.id or ""):gsub("%s+", ""):gsub("[%-_]", "")
+        local title = string.lower(entry.title or ""):gsub("%s+", ""):gsub("[%-_]", "")
+        local diff = string.lower(q.difficulty or ""):gsub("%s+", ""):gsub("[%-_]", "")
+        local mode = string.lower(q.mode or ""):gsub("%s+", ""):gsub("[%-_]", "")
+        local tag = string.lower(entry.tag or ""):gsub("%s+", ""):gsub("[%-_]", "")
+
+        if diff == cleanQuery or title == cleanQuery or id == cleanQuery or mode == cleanQuery or tag == cleanQuery then
+            return {
+                count = 1,
+                mode = q.mode,
+                difficulty = q.difficulty,
+                night = q.night
+            }
+        end
+    end
+
+    -- 4. Fuzzy Substring Match (handles "Badlands", "PollutedWasteland", "Act4", etc.)
+    for _, entry in ipairs(allEntries) do
+        local q = entry.queue or {}
+        local id = string.lower(entry.id or ""):gsub("%s+", ""):gsub("[%-_]", "")
+        local title = string.lower(entry.title or ""):gsub("%s+", ""):gsub("[%-_]", "")
+        local diff = string.lower(q.difficulty or ""):gsub("%s+", ""):gsub("[%-_]", "")
+
+        if string.find(id, cleanQuery, 1, true) or string.find(title, cleanQuery, 1, true)
+            or string.find(cleanQuery, id, 1, true) or string.find(cleanQuery, title, 1, true)
+            or (diff ~= "" and string.find(diff, cleanQuery, 1, true)) then
+            return {
+                count = 1,
+                mode = q.mode,
+                difficulty = q.difficulty,
+                night = q.night
+            }
+        end
+    end
+
+    -- 5. Safe Fallback
     return {
-        difficulty = difficulty,
+        count = 1,
         mode = "survival",
-        count = 1
+        difficulty = difficulty ~= "" and difficulty or nil
     }
 end
 
@@ -1971,8 +1974,6 @@ function TDS:Mode(difficulty)
             "ReactUniversalHotbar"
         )
 
-    -- In a match, Mode only remembers the selected mode.
-    -- The strategy will continue into GameInfo().
     if not lobbyHud
         and hotbar then
 
@@ -2033,8 +2034,6 @@ function TDS:Mode(difficulty)
             return true
         end
 
-        -- Stop retrying once Roblox has already moved us
-        -- out of the lobby.
         if not PlayerGui:FindFirstChild(
             "ReactLobbyHud"
         ) then
@@ -2047,15 +2046,10 @@ function TDS:Mode(difficulty)
 end
 
 function TDS:GameInfo(mapName, modifiers)
-    -- Trial mode has no map voting.
-    -- Matchmaking already puts us into the Trial server, so skip
-    -- ReactGameIntermission / map lookup / map vote completely.
     if self.SavedDifficulty == "Trial" then
         return true
     end
 
-    -- Same strategy file can run in lobby and in-match.
-    -- Do nothing here while matchmaking is still in the lobby.
     if PlayerGui:FindFirstChild(
         "ReactLobbyHud"
     )
@@ -2099,8 +2093,6 @@ function TDS:GameInfo(mapName, modifiers)
         )
 
     if rematching then
-        -- Prevent the rest of the strategy from running
-        -- in the wrong server/map while matchmaking moves us.
         while true do
             task.wait(1)
         end
@@ -2114,9 +2106,6 @@ function TDS:GameInfo(mapName, modifiers)
 
         local votes = {}
 
-        -- Supports both:
-        -- {"HiddenEnemies", "Fog"}
-        -- {HiddenEnemies = true, Fog = true, Glass = false}
         for key, value in pairs(modifiers) do
             if type(key) == "number" then
                 if value ~= nil and value ~= false then
@@ -2533,14 +2522,14 @@ function TDS:Ability(index, abilityName, data, loop)
             if ok
                 and DirectResponseOK(result) then
 
-                return true
-            end
-
-            task.wait(0.25)
+            return true
         end
 
-        return false
+        task.wait(0.25)
     end
+
+    return false
+end
 
     if loop == true then
         local active = true
@@ -2571,10 +2560,6 @@ function TDS:LoopAbility(index, abilityName, data)
     )
 end
 
-
-
--- Automatically vote to skip event/story cutscenes only.
--- This is separate from the normal wave skip configuration.
 local function IsCutsceneSkipVoteActive()
     local voteReplicator = GetDirectVoteReplicator()
 
