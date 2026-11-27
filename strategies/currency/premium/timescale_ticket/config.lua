@@ -54,11 +54,6 @@ return {
         JailedTowers = {
             DisplayName = "Jailed",
             StrategyPath = "strategies/currency/premium/timescale_ticket/jailed.lua"
-        },
-
-        Inflation = {
-            DisplayName = "Inflation",
-            StrategyPath = "strategies/currency/premium/timescale_ticket/inflation.lua"
         }
     }
 }
