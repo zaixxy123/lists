@@ -16,12 +16,14 @@ return {
         "Cataclysm",
         "Construction Crazy",
         "Retro The Heights",
-        "Forgetten Docks"
+        "Forgetten Docks",
+        "Winter Abyss"
     },
     Maps = {
         ["Construction Crazy"] = "strategies/fallen/starter/construction_crazy.lua",
         ["Cataclysm"] = "strategies/fallen/starter/cataclysm.lua",
         ["Retro The Heights"] = "strategies/fallen/starter/retro_the_heights.lua",
-        ["Forgetten Docks"] = "strategies/fallen/starter/forgetten_docks.lua"
+        ["Forgetten Docks"] = "strategies/fallen/starter/forgetten_docks.lua",
+        ["Winter Abyss"] = "strategies/fallen/starter/winter_abyss.lua"
     }
 }
