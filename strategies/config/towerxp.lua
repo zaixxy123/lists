@@ -23,7 +23,8 @@ return {
         {
             Name = "Evolved Towers",
             RequiredTowers = {
-                "Pyromancer"
+                "Farm",
+                "Boomerang"
             },
             RequireSelectedTower = true,
             Towers = {
