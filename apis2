@@ -645,6 +645,7 @@ local ActiveSkipWaves = VoteSkipWaves
 local VoteSkipAll = false
 local VoteSkipConfigured = false
 local VIPVoteSkipWorkerRunning = false
+local VIPMatchStarted
 
 local RuntimeGlobals = getgenv()
 
@@ -859,7 +860,7 @@ local function TryGetCurrentWave()
     )
 end
 
-local function VIPMatchStarted()
+VIPMatchStarted = function()
     local rep = GetDirectGameStateReplicator()
     return rep ~= nil
         and rep:GetAttribute("GameStarted") == true
@@ -879,8 +880,8 @@ local function UpdateVIPAutoSkip()
         return
     end
 
+    -- Once the game starts, leave the setting unchanged until VoteSkip.
     if not VoteSkipConfigured or owner ~= VIPVoteSkipController then
-        SetAutoSkip(false)
         return
     end
 
@@ -1088,7 +1089,9 @@ function TDS:ResetIndex()
 
     if HasVIP then
         RuntimeGlobals.VIPVoteSkipOwner = nil
-        SetAutoSkip(false)
+        if not VIPMatchStarted() then
+            SetAutoSkip(false)
+        end
         StartVIPVoteSkip()
     end
 end
