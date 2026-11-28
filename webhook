@@ -2617,7 +2617,7 @@ local function BuildTowerLevelsField(targets)
     end
 
     if #targets == 0 then
-        return "Unavailable"
+        return "0/20"
     end
 
     local ok, xp = pcall(function()
@@ -2625,8 +2625,9 @@ local function BuildTowerLevelsField(targets)
         local value = type(cache.GetValue) == "function" and cache:GetValue() or nil
         return type(value) == "table" and value or cache:Get():expect()
     end)
+    -- Treat missing or temporarily unreadable XP data as zero for display.
     if not ok or type(xp) ~= "table" then
-        return "Unavailable"
+        xp = {}
     end
 
     local normalizedXP = {}
