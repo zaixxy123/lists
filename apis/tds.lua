@@ -44,11 +44,8 @@ return function(Context)
     RuntimeGlobals.VIPVoteSkipVersion =
         (tonumber(RuntimeGlobals.VIPVoteSkipVersion) or 0) + 1
 
-    -- Keep this API's worker separate from the Auto Strategy apis2 worker.
-    RuntimeGlobals.VIPVoteSkipVersionTDS =
-        (tonumber(RuntimeGlobals.VIPVoteSkipVersionTDS) or 0) + 1
-    local VIPVoteSkipVersion = RuntimeGlobals.VIPVoteSkipVersionTDS
-    local VIPVoteSkipController = {}
+    local VIPVoteSkipVersion =
+        RuntimeGlobals.VIPVoteSkipVersion
 
     local HasVIP = Context.HasVIP
 
@@ -295,7 +292,6 @@ return function(Context)
         if HasVIP
             and SetAutoSkip then
 
-            RuntimeGlobals.VIPVoteSkipOwner = nil
             SetAutoSkip(false)
 
             if StartVIPVoteSkip then
@@ -849,9 +845,8 @@ return function(Context)
     end
 
     local function UpdateVIPAutoSkip()
-        -- Another API's VoteSkip must take priority over our default OFF state.
-        if RuntimeGlobals.VIPVoteSkipOwner ~= VIPVoteSkipController
-            or not VoteSkipConfigured then
+        if not VoteSkipConfigured then
+            SetAutoSkip(false)
             return
         end
 
@@ -879,7 +874,7 @@ return function(Context)
 
         task.spawn(function()
             while IsStrategyRuntimeEnabled()
-                and RuntimeGlobals.VIPVoteSkipVersionTDS
+                and RuntimeGlobals.VIPVoteSkipVersion
                     == VIPVoteSkipVersion do
 
                 UpdateVIPAutoSkip()
@@ -936,7 +931,6 @@ return function(Context)
             VoteSkipAll = true
 
             if HasVIP then
-                RuntimeGlobals.VIPVoteSkipOwner = VIPVoteSkipController
                 UpdateVIPAutoSkip()
                 StartVIPVoteSkip()
             else
@@ -974,7 +968,6 @@ return function(Context)
         end
 
         if HasVIP then
-            RuntimeGlobals.VIPVoteSkipOwner = VIPVoteSkipController
             UpdateVIPAutoSkip()
             StartVIPVoteSkip()
         else
@@ -1548,17 +1541,6 @@ return function(Context)
     end
     
 
-
-    -- Start with VIP Auto Skip disabled before any strategy's VoteSkip line.
-    -- ResetIndex also starts this worker for strategies loaded later.
-    if HasVIP and IsStrategyRuntimeEnabled() then
-        -- Only disable Auto Skip at startup if no API has claimed it.
-        -- VoteSkip() must be able to turn it back on later in the match.
-        if RuntimeGlobals.VIPVoteSkipOwner == nil then
-            SetAutoSkip(false)
-        end
-        StartVIPVoteSkip()
-    end
 
     shared.TDSTable = TDS
     shared["TDS_Table"] = TDS
