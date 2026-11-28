@@ -1,0 +1,1633 @@
+-- Auto Progress TDS Strategy API
+-- Upload this file to:
+--   zaixxy123/lists/apis/tds.lua
+--
+-- Only the TDS: strategy methods live here.
+-- Main-script helpers/state are passed in through Context.
+
+return function(Context)
+    if type(Context) ~= "table" then
+        warn("[TDS API] Missing context")
+        return nil
+    end
+
+    local TDS = Context.TDS
+
+    if type(TDS) ~= "table" then
+        warn("[TDS API] Missing TDS table")
+        return nil
+    end
+
+    local plr = Context.plr
+    local rf = Context.rf
+    local ReplicatedStorage = Context.ReplicatedStorage
+    local StrategyConfig = Context.StrategyConfig
+
+    local ProtectedNoop = Context.ProtectedNoop
+    local IsStrategyRuntimeEnabled = Context.IsStrategyRuntimeEnabled
+    local GetDirectGameStateReplicator = Context.GetDirectGameStateReplicator
+    local DirectResponseOK = Context.DirectResponseOK
+    local DirectSetLoadout = Context.DirectSetLoadout
+    local DirectSelectMap = Context.DirectSelectMap
+    local StartDirectSelectiveSkip = Context.StartDirectSelectiveSkip
+    local StartDirectAutoSkip = Context.StartDirectAutoSkip
+    local DirectReady = Context.DirectReady
+    local DirectUpgradeTower = Context.DirectUpgradeTower
+    local DirectSellTower = Context.DirectSellTower
+    local DirectWaitForWave = Context.DirectWaitForWave
+    local DirectSetTarget = Context.DirectSetTarget
+
+    local MarketplaceService = game:GetService("MarketplaceService")
+    local VIP_GAMEPASS_ID = 10518590
+
+    local RuntimeGlobals = getgenv()
+    RuntimeGlobals.VIPVoteSkipVersionTDS =
+        (tonumber(RuntimeGlobals.VIPVoteSkipVersionTDS) or 0) + 1
+    local VIPVoteSkipVersion = RuntimeGlobals.VIPVoteSkipVersionTDS
+    local VIPVoteSkipController = {}
+    local VIPVoteSkipKind = "tds"
+
+    -- Re-executing this API invalidates its old worker, not the other API.
+    if RuntimeGlobals.VIPVoteSkipOwnerKind == VIPVoteSkipKind then
+        RuntimeGlobals.VIPVoteSkipOwner = nil
+        RuntimeGlobals.VIPVoteSkipOwnerKind = nil
+    end
+
+    local HasVIP = Context.HasVIP
+
+    if HasVIP == nil then
+        HasVIP = false
+
+        pcall(function()
+            HasVIP = MarketplaceService:UserOwnsGamePassAsync(
+                plr.UserId,
+                VIP_GAMEPASS_ID
+            ) == true
+        end)
+    end
+
+    TDS.HasVIP = HasVIP
+
+
+    -- Tower support automation (per API instance).
+    local HttpService = game:GetService("HttpService")
+    local TowerAutoFlags = {Commander=false, DJ=false, Necromancer=false}
+    local TowerAutoRunning = {Commander=false, DJ=false, Necromancer=false}
+    local function SupportTowers(name, minLevel)
+        local found = {}
+        local folder = workspace:FindFirstChild("Towers")
+        if not folder then return found end
+        for _, rep in ipairs(folder:GetDescendants()) do
+            if rep:IsA("Folder") and rep.Name == "TowerReplicator"
+                and rep:GetAttribute("Name") == name
+                and tonumber(rep:GetAttribute("OwnerId")) == plr.UserId
+                and (tonumber(rep:GetAttribute("Upgrade")) or 0) >= minLevel then
+                table.insert(found, rep.Parent)
+            end
+        end
+        return found
+    end
+    local function ActivateSupport(tower, ability)
+        local ok, result = pcall(function()
+            return rf:InvokeServer("Troops", "Abilities", "Activate",
+                {Troop=tower, Name=ability, Data={}})
+        end)
+        return ok and result ~= false and result ~= nil
+    end
+    local function SupportDelay(seconds)
+        local pg = plr:FindFirstChild("PlayerGui")
+        local hotbar = pg and pg:FindFirstChild("ReactUniversalHotbar")
+        local frame = hotbar and hotbar:FindFirstChild("Frame")
+        local scale = frame and frame:FindFirstChild("timescale")
+        if scale and scale.Visible then
+            local lock = scale:FindFirstChild("Lock")
+            if lock and not lock.Visible then return seconds / 2 end
+        end
+        return seconds
+    end
+    local function CountNecroGraves(rep)
+        local store = rep and rep:FindFirstChild("GraveStone")
+        if not store then return 0, 0 end
+        local max = tonumber(store:GetAttribute("Max_Graves"))
+            or tonumber(rep:GetAttribute("Max_Graves"))
+        local level = tonumber(rep:GetAttribute("Upgrade")) or 0
+        if not max or max < 2 then
+            max = level >= 4 and 9 or (level >= 2 and 6 or 3)
+        end
+        local count = 0
+        for key, value in pairs(store:GetAttributes()) do
+            if type(key) == "string" and #key > 20 then
+                if tostring(value):find("Destroy") then
+                    store:SetAttribute(key, nil)
+                else
+                    count += 1
+                end
+            end
+        end
+        return count, max
+    end
+
+    -- Server-tick Commander chain with per-tower ammo checks and failed-cast retry.
+    local CommanderChainModules
+    local function GetCommanderChainModules()
+        if CommanderChainModules then return CommanderChainModules end
+        local ok, gameState, ticks, ammoStore = pcall(function()
+            return require(ReplicatedStorage.Shared.Modules.GameState),
+                require(ReplicatedStorage.Shared.Modules.ServerTicks),
+                require(ReplicatedStorage.Client.Interfaces.Stores.Game.AbilityAmmoStore)
+        end)
+        if ok and type(gameState) == "table"
+            and type(ticks) == "table" and type(ticks.getTime) == "function"
+            and type(ammoStore) == "table" and type(ammoStore.getState) == "function" then
+            CommanderChainModules = {GameState=gameState, Ticks=ticks, Ammo=ammoStore}
+        end
+        return CommanderChainModules
+    end
+
+    local function StartCommanderChain()
+        if TowerAutoRunning.Commander or not TowerAutoFlags.Commander then return end
+        TowerAutoRunning.Commander = true
+        task.spawn(function()
+            local readyAt = setmetatable({}, {__mode = "k"})
+            local retryAt = setmetatable({}, {__mode = "k"})
+            local nextCast = 0
+            local lastTower
+            local previousTime
+            local wasStarted = false
+            while TowerAutoFlags.Commander and IsStrategyRuntimeEnabled() do
+                local modules = GetCommanderChainModules()
+                if modules then
+                    local okTime, now = pcall(modules.Ticks.getTime)
+                    local started = modules.GameState.GameStarted == true
+                    if okTime and type(now) == "number" then
+                        if (previousTime and now < previousTime - 1)
+                            or (started and not wasStarted) then
+                            table.clear(readyAt)
+                            table.clear(retryAt)
+                            nextCast = 0
+                            lastTower = nil
+                        end
+                        previousTime, wasStarted = now, started
+                        if started and not modules.GameState.GameOver and now >= nextCast then
+                            local towers = SupportTowers("Commander", 2)
+                            table.sort(towers, function(a, b)
+                                local aRep = a:FindFirstChild("TowerReplicator")
+                                local bRep = b:FindFirstChild("TowerReplicator")
+                                return (tonumber(aRep and aRep:GetAttribute("CreatedAt")) or 0)
+                                    < (tonumber(bRep and bRep:GetAttribute("CreatedAt")) or 0)
+                            end)
+                            local ammoOK, ammo = pcall(modules.Ammo.getState)
+                            ammo = ammoOK and type(ammo) == "table" and ammo or {}
+                            local start = table.find(towers, lastTower) or 0
+                            for offset = 1, #towers do
+                                local tower = towers[(start + offset - 1) % #towers + 1]
+                                local uid = tower:GetAttribute("TowerUID")
+                                local status = uid and ammo["Call Of Arms" .. tostring(uid)]
+                                local hasCharge = not status or status.ammo == nil
+                                    or (tonumber(status.ammo) or 0) > 0
+                                if hasCharge and now >= (readyAt[tower] or 0)
+                                    and os.clock() >= (retryAt[tower] or 0) then
+                                    local rep = tower:FindFirstChild("TowerReplicator")
+                                    if rep and (tonumber(rep:GetAttribute("Upgrade")) or 0) >= 4
+                                        and getgenv().SupportCaravan ~= false then
+                                        ActivateSupport(tower, "Support Caravan")
+                                    end
+                                    local ok, accepted = pcall(function()
+                                        return rf:InvokeServer("Troops", "Abilities", "Activate", {
+                                            Troop = tower, Name = "Call Of Arms", Data = {}
+                                        })
+                                    end)
+                                    if ok and accepted == true then
+                                        local castTime = modules.Ticks.getTime()
+                                        readyAt[tower] = castTime + 30
+                                        nextCast = castTime + 10
+                                        lastTower = tower
+                                    else
+                                        retryAt[tower] = os.clock() + 1
+                                    end
+                                    break
+                                end
+                            end
+                        end
+                    end
+                end
+                task.wait(0.05)
+            end
+            TowerAutoRunning.Commander = false
+        end)
+    end
+
+    local function StartSupportAuto(kind)
+        if kind == "Commander" then
+            StartCommanderChain()
+            return
+        end
+        if TowerAutoRunning[kind] or not TowerAutoFlags[kind] then return end
+        TowerAutoRunning[kind] = true
+        task.spawn(function()
+            local index, lastUsed = 1, {}
+            while TowerAutoFlags[kind] and IsStrategyRuntimeEnabled() do
+                local name = kind == "DJ" and "DJ Booth" or kind
+                local minLevel = kind == "DJ" and 3 or 0
+                local towers = SupportTowers(name, minLevel)
+                if #towers == 0 then
+                    index = 1
+                    task.wait(0.3)
+                else
+                    if index > #towers then index = 1 end
+                    local tower = towers[index]
+                    index = index % #towers + 1
+                    local now = os.clock()
+                    if kind == "DJ" then
+                        ActivateSupport(tower, "Drop The Beat")
+                        task.wait(1)
+                    else
+                        local rep = tower:FindFirstChild("TowerReplicator")
+                        local count, max = CountNecroGraves(rep)
+                        local cooldown = tonumber(rep and rep:GetAttribute("AbilityDebounce")) or 5
+                        if max > 0 and count >= max
+                            and (not lastUsed[tower] or now-lastUsed[tower] >= cooldown) then
+                            if ActivateSupport(tower, "Raise The Dead") then
+                                lastUsed[tower] = os.clock()
+                                task.wait(1)
+                            else
+                                task.wait(0.5)
+                            end
+                        else
+                            task.wait(0.1)
+                        end
+                    end
+                end
+            end
+            TowerAutoRunning[kind] = false
+        end)
+    end
+    function TDS:AutoChain()
+        TowerAutoFlags.Commander = true
+        StartSupportAuto("Commander")
+        return true
+    end
+    function TDS:AutoDJ()
+        TowerAutoFlags.DJ = true
+        StartSupportAuto("DJ")
+        return true
+    end
+    function TDS:AutoNecro()
+        TowerAutoFlags.Necromancer = true
+        StartSupportAuto("Necromancer")
+        return true
+    end
+
+    local VoteSkipWaves = {}
+    local VoteSkipAll = false
+    local VoteSkipConfigured = false
+    local VIPVoteSkipWorkerRunning = false
+    local VIPMatchStarted
+    local NormalVoteSkipWorkerRunning = false
+    local SetAutoSkip
+    local StartVIPVoteSkip
+
+    function TDS:ResetIndex()
+        self.PlacedTowers = {}
+        self.placed_towers = self.PlacedTowers
+        self.StackCounts = {}
+
+        table.clear(VoteSkipWaves)
+        VoteSkipAll = false
+        VoteSkipConfigured = false
+
+        if HasVIP
+            and SetAutoSkip then
+
+            if RuntimeGlobals.VIPVoteSkipOwner == VIPVoteSkipController then
+                RuntimeGlobals.VIPVoteSkipOwner = nil
+                RuntimeGlobals.VIPVoteSkipOwnerKind = nil
+            end
+            if not VIPMatchStarted() then
+                SetAutoSkip(false)
+            end
+
+            if StartVIPVoteSkip then
+                StartVIPVoteSkip()
+            end
+        end
+    end
+
+    function TDS:Place(towerName, x, y, z, ...)
+        local args = {...}
+        local isStacking =
+            args[#args] == true
+            or args[#args] == "stack"
+    
+        local position = Vector3.new(x, y, z)
+    
+        if isStacking then
+            local baseY = tonumber(y) or 0
+    
+            
+            
+            if math.abs(baseY) < 0.001 then
+                local rayParams = RaycastParams.new()
+                rayParams.FilterType = Enum.RaycastFilterType.Exclude
+    
+                local ignore = {}
+                local towersFolder = workspace:FindFirstChild("Towers")
+    
+                if towersFolder then
+                    table.insert(ignore, towersFolder)
+                end
+    
+                if plr.Character then
+                    table.insert(ignore, plr.Character)
+                end
+    
+                rayParams.FilterDescendantsInstances = ignore
+    
+                local hit = workspace:Raycast(
+                    Vector3.new(x, 250, z),
+                    Vector3.new(0, -1000, 0),
+                    rayParams
+                )
+    
+                if not hit then
+                    ProtectedNoop("[STACKER] No surface found:", towerName, x, y, z)
+                    return false
+                end
+    
+                baseY = hit.Position.Y
+            end
+    
+            local stackKey = string.format("%.5f|%.5f", tonumber(x) or 0, tonumber(z) or 0)
+            local stackNumber = (self.StackCounts[stackKey] or 0) + 1
+            self.StackCounts[stackKey] = stackNumber
+    
+            position = Vector3.new(
+                x,
+                baseY + 25,
+                z
+            )
+        end
+    
+        local towersFolder = workspace:WaitForChild("Towers")
+    
+        local existing = {}
+    
+        for _, tower in ipairs(towersFolder:GetChildren()) do
+            local owner = tower:FindFirstChild("Owner")
+    
+            if owner and owner.Value == plr.UserId then
+                existing[tower] = true
+            end
+        end
+    
+        
+        while IsStrategyRuntimeEnabled() do
+            local gameStateReplicator = GetDirectGameStateReplicator()
+    
+            if gameStateReplicator
+                and gameStateReplicator:GetAttribute("GameOver") == true then
+                return false
+            end
+    
+            local ok, result = pcall(function()
+                if isStacking then
+                    return rf:InvokeServer(
+                        "Troops",
+                        "Place",
+                        {
+                            Rotation = CFrame.new(),
+                            Position = position
+                        },
+                        towerName
+                    )
+                end
+    
+                return rf:InvokeServer(
+                    "Troops",
+                    "Place",
+                    {
+                        Rotation = CFrame.new(),
+                        Position = position
+                    },
+                    towerName,
+                    (table.unpack or unpack)(args)
+                )
+            end)
+    
+            if ok and DirectResponseOK(result) then
+                break
+            end
+    
+            task.wait(0.25)
+        end
+    
+        if not IsStrategyRuntimeEnabled() then
+            return false
+        end
+    
+        local newTower
+    
+        repeat
+            local gameStateReplicator = GetDirectGameStateReplicator()
+    
+            if gameStateReplicator
+                and gameStateReplicator:GetAttribute("GameOver") == true then
+                return false
+            end
+    
+            for _, tower in ipairs(towersFolder:GetChildren()) do
+                if not existing[tower] then
+                    local owner = tower:FindFirstChild("Owner")
+    
+                    if owner and owner.Value == plr.UserId then
+                        newTower = tower
+                        break
+                    end
+                end
+            end
+    
+            if not newTower then
+                task.wait(0.05)
+            end
+        until newTower
+    
+        table.insert(TDS.PlacedTowers, newTower)
+        return #TDS.PlacedTowers
+    end
+    
+    if TDS.AutoMercenaryEnabled == nil then
+        TDS.AutoMercenaryEnabled = true
+    end
+
+    function TDS:SetAutoMercenary(enabled)
+        self.AutoMercenaryEnabled =
+            enabled ~= false
+
+        if self.AutoMercenaryEnabled
+            and self.HasMercenaryBase == true then
+
+            self:Mercenary()
+        end
+
+        return self.AutoMercenaryEnabled
+    end
+
+    function TDS:Loadout(...)
+        local requested = {...}
+        for _, towerName in ipairs(requested) do
+            towerName = tostring(towerName)
+
+            if towerName == "Gatling Gun" then
+                local loadAutoGatling =
+                    RuntimeGlobals.LoadAutoGatling
+
+                if type(loadAutoGatling) == "function" then
+                    task.spawn(function()
+                        pcall(
+                            loadAutoGatling
+                        )
+                    end)
+                end
+            elseif towerName == "Necromancer" then
+                TowerAutoFlags.Necromancer = true
+                StartSupportAuto("Necromancer")
+            end
+        end
+
+        return DirectSetLoadout(
+            (table.unpack or unpack)(requested)
+        )
+    end
+
+    local function BuildMatchmakingPayload(difficulty)
+        difficulty = tostring(difficulty or "")
+        local cleanQuery = string.lower(difficulty):gsub("%s+", ""):gsub("[%-_]", "")
+
+        local mmFolder = ReplicatedStorage:FindFirstChild("Client")
+            and ReplicatedStorage.Client:FindFirstChild("Interfaces")
+            and ReplicatedStorage.Client.Interfaces:FindFirstChild("Lobby")
+            and ReplicatedStorage.Client.Interfaces.Lobby:FindFirstChild("Components")
+            and ReplicatedStorage.Client.Interfaces.Lobby.Components:FindFirstChild("NewMatchmaking")
+
+        if not mmFolder then
+            return { count = 1, mode = "survival", difficulty = difficulty ~= "" and difficulty or nil }
+        end
+
+        local MatchmakingModel = require(mmFolder.MatchmakingModel)
+        local TrialDataMod = mmFolder:FindFirstChild("MatchmakingTrialData")
+
+        -- 1. Gather all registered game modes from MatchmakingModel
+        local allEntries = {}
+        for _, modes in pairs(MatchmakingModel.MODE_GROUPS) do
+            for _, entry in ipairs(modes) do
+                table.insert(allEntries, entry)
+            end
+        end
+
+        -- 2. Include live rotating Trial safely WITHOUT calling UI asset loaders
+        if TrialDataMod then
+            local ok, TD = pcall(require, TrialDataMod)
+            if ok and type(TD) == "table" then
+                local rotOk, rot = pcall(TD.getCurrentRotation)
+                local trialName = (rotOk and type(rot) == "table" and rot.trialName) or "Trial"
+                table.insert(allEntries, {
+                    id = "trial",
+                    title = trialName,
+                    tag = "Trial",
+                    queue = {
+                        mode = "Trials",
+                        requirements = {
+                            maxPartySize = 4,
+                            minLevel = 40
+                        }
+                    }
+                })
+            end
+        end
+
+        -- 3. Exact & Normalized Match
+        for _, entry in ipairs(allEntries) do
+            local q = entry.queue or {}
+            local id = string.lower(entry.id or ""):gsub("%s+", ""):gsub("[%-_]", "")
+            local title = string.lower(entry.title or ""):gsub("%s+", ""):gsub("[%-_]", "")
+            local diff = string.lower(q.difficulty or ""):gsub("%s+", ""):gsub("[%-_]", "")
+            local mode = string.lower(q.mode or ""):gsub("%s+", ""):gsub("[%-_]", "")
+            local tag = string.lower(entry.tag or ""):gsub("%s+", ""):gsub("[%-_]", "")
+
+            if diff == cleanQuery or title == cleanQuery or id == cleanQuery or mode == cleanQuery or tag == cleanQuery then
+                return {
+                    count = 1,
+                    mode = q.mode,
+                    difficulty = q.difficulty,
+                    night = q.night
+                }
+            end
+        end
+
+        -- 4. Fuzzy Substring Match (handles "Badlands", "PollutedWasteland", "Act4", etc.)
+        for _, entry in ipairs(allEntries) do
+            local q = entry.queue or {}
+            local id = string.lower(entry.id or ""):gsub("%s+", ""):gsub("[%-_]", "")
+            local title = string.lower(entry.title or ""):gsub("%s+", ""):gsub("[%-_]", "")
+            local diff = string.lower(q.difficulty or ""):gsub("%s+", ""):gsub("[%-_]", "")
+
+            if string.find(id, cleanQuery, 1, true) or string.find(title, cleanQuery, 1, true)
+                or string.find(cleanQuery, id, 1, true) or string.find(cleanQuery, title, 1, true)
+                or (diff ~= "" and string.find(diff, cleanQuery, 1, true)) then
+                return {
+                    count = 1,
+                    mode = q.mode,
+                    difficulty = q.difficulty,
+                    night = q.night
+                }
+            end
+        end
+
+        -- 5. Safe Fallback
+        return {
+            count = 1,
+            mode = "survival",
+            difficulty = difficulty ~= "" and difficulty or nil
+        }
+    end
+
+    function TDS:Mode(difficulty)
+        difficulty =
+            tostring(
+                difficulty or ""
+            )
+
+        self.SavedDifficulty =
+            difficulty
+
+        self.SavedMatchmaking =
+            BuildMatchmakingPayload(
+                difficulty
+            )
+
+        if difficulty ~= "Trial" then
+            return true
+        end
+
+        local playerGui =
+            plr:FindFirstChild("PlayerGui")
+
+        local lobbyHud =
+            playerGui
+            and playerGui:FindFirstChild(
+                "ReactLobbyHud"
+            )
+
+        local hotbar =
+            playerGui
+            and playerGui:FindFirstChild(
+                "ReactUniversalHotbar"
+            )
+
+        if not lobbyHud
+            and hotbar then
+
+            return false
+        end
+
+        local ok, result =
+            pcall(function()
+                return rf:InvokeServer(
+                    "Multiplayer",
+                    "v2:start",
+                    table.clone(
+                        self.SavedMatchmaking
+                    )
+                )
+            end)
+
+        return ok
+            and result ~= false
+    end
+
+    function TDS:GameInfo(mapName, modifiers)
+        if type(modifiers) == "table" then
+
+            local votes = {}
+
+            -- Supports both:
+            -- {"HiddenEnemies", "Fog"}
+            -- {HiddenEnemies = true, Fog = true, Glass = false}
+            for key, value in pairs(modifiers) do
+                if type(key) == "number" then
+                    if value ~= nil and value ~= false then
+                        votes[tostring(value)] = true
+                    end
+                elseif value == true then
+                    votes[tostring(key)] = true
+                end
+            end
+
+            pcall(function()
+                ReplicatedStorage
+                    :WaitForChild("Network")
+                    :WaitForChild("Modifiers")
+                    :WaitForChild(
+                        "RF:BulkVoteModifiers"
+                    )
+                    :InvokeServer(votes)
+            end)
+        end
+
+        return DirectSelectMap(
+            tostring(mapName)
+        )
+    end
+
+    local function GetAutoSkipButton()
+        local playerGui = plr:FindFirstChild("PlayerGui")
+        local settings = playerGui and playerGui:FindFirstChild("ReactUniversalSettings")
+        local window = settings and settings:FindFirstChild("window")
+        local scrollingFrame = window and window:FindFirstChild("scrollingFrame")
+        local unknown = scrollingFrame and scrollingFrame:FindFirstChild("Unknown")
+        local autoSkip = unknown and unknown:FindFirstChild("Auto Skip")
+        local button = autoSkip and autoSkip:FindFirstChild("button")
+        local toggle = button and button:FindFirstChild("toggle")
+
+        return toggle and toggle:FindFirstChild("imageButton")
+    end
+
+    local function GetAutoSkipState()
+        local button = GetAutoSkipButton()
+
+        if not button then
+            return nil
+        end
+
+        local contentText = button:FindFirstChild("contentText")
+
+        if not contentText then
+            return nil
+        end
+
+        local text = tostring(contentText.Text):lower()
+
+        if text == "enabled" then
+            return true
+        end
+
+        if text == "disabled" then
+            return false
+        end
+
+        return nil
+    end
+
+    local AutoSkipPendingState = nil
+    local AutoSkipLastClickAt = 0
+
+    local function ToggleAutoSkip()
+        local button =
+            GetAutoSkipButton()
+
+        if not button
+            or type(getconnections) ~= "function" then
+
+            return false
+        end
+
+        local downConnections =
+            getconnections(
+                button.MouseButton1Down
+            )
+
+        local upConnections =
+            getconnections(
+                button.MouseButton1Up
+            )
+
+        if #downConnections == 0
+            or #upConnections == 0 then
+
+            return false
+        end
+
+        for _, connection in ipairs(
+            downConnections
+        ) do
+            pcall(function()
+                connection.Function()
+            end)
+        end
+
+        task.wait(0.05)
+
+        for _, connection in ipairs(
+            upConnections
+        ) do
+            pcall(function()
+                connection.Function()
+            end)
+        end
+
+        return true
+    end
+
+    SetAutoSkip = function(enabled)
+        enabled = enabled == true
+
+        local current = GetAutoSkipState()
+
+        if current == nil then
+            return false
+        end
+
+        if current == enabled then
+            AutoSkipPendingState = nil
+            return true
+        end
+
+        if AutoSkipPendingState == enabled
+            and os.clock() - AutoSkipLastClickAt < 0.5 then
+
+            return false
+        end
+
+        AutoSkipPendingState = enabled
+        AutoSkipLastClickAt = os.clock()
+
+        if not ToggleAutoSkip() then
+            AutoSkipPendingState = nil
+            return false
+        end
+
+        task.wait(0.15)
+
+        current = GetAutoSkipState()
+
+        if current == enabled then
+            AutoSkipPendingState = nil
+            return true
+        end
+
+        return false
+    end
+
+    local function GetTopGameDisplayFrame()
+        local playerGui = plr:FindFirstChild("PlayerGui")
+        local gui = playerGui and playerGui:FindFirstChild("ReactGameTopGameDisplay")
+        return gui and gui:FindFirstChild("Frame")
+    end
+
+    local function GetCurrentWaveNoWait()
+        local frame = GetTopGameDisplayFrame()
+        local wave = frame and frame:FindFirstChild("wave")
+        local container = wave and wave:FindFirstChild("container")
+        local value = container and container:FindFirstChild("value")
+
+        if not value then
+            return nil
+        end
+
+        return tonumber(tostring(value.Text):match("(%d+)"))
+    end
+
+    local function GetNormalVoteButton()
+        local playerGui = plr:FindFirstChild("PlayerGui")
+        local voteGui = playerGui and playerGui:FindFirstChild("ReactOverridesVote")
+        local frameObject = voteGui and voteGui:FindFirstChild("Frame")
+        local votes = frameObject and frameObject:FindFirstChild("votes")
+
+        return votes and votes:FindFirstChild("vote")
+    end
+
+    local function CanNormalVoteSkip()
+        local stateReplicators =
+            ReplicatedStorage:FindFirstChild("StateReplicators")
+
+        local voteReplicator =
+            stateReplicators
+            and stateReplicators:FindFirstChild("VoteReplicator")
+
+        if voteReplicator
+            and voteReplicator:GetAttribute("Enabled") == true
+            and voteReplicator:GetAttribute("Title") == "Skip?" then
+
+            return true
+        end
+
+        local voteButton = GetNormalVoteButton()
+
+        return voteButton ~= nil
+            and voteButton.Position == UDim2.new(0.5, 0, 0.5, 0)
+    end
+
+    VIPMatchStarted = function()
+        local rep = GetDirectGameStateReplicator()
+        return rep ~= nil
+            and rep:GetAttribute("GameStarted") == true
+            and rep:GetAttribute("GameOver") ~= true
+    end
+
+    local function UpdateVIPAutoSkip()
+        -- Ready starts a countdown; GameStarted is the actual start.
+        if not VIPMatchStarted() then
+            SetAutoSkip(false)
+            return
+        end
+
+        local owner = RuntimeGlobals.VIPVoteSkipOwner
+        if owner ~= nil and owner ~= VIPVoteSkipController then
+            return
+        end
+
+        -- Once the game starts, leave the setting unchanged until VoteSkip.
+        if not VoteSkipConfigured or owner ~= VIPVoteSkipController then
+            return
+        end
+
+        if VoteSkipAll then
+            SetAutoSkip(true)
+            return
+        end
+
+        local currentWave = GetCurrentWaveNoWait()
+
+        if not currentWave or currentWave <= 0 then
+            SetAutoSkip(VoteSkipWaves[1] == true)
+            return
+        end
+
+        SetAutoSkip(VoteSkipWaves[currentWave] == true)
+    end
+
+    StartVIPVoteSkip = function()
+        if VIPVoteSkipWorkerRunning then
+            return
+        end
+
+        VIPVoteSkipWorkerRunning = true
+
+        task.spawn(function()
+            -- A farm can be enabled after this API loads. Stay ready.
+            while game.PlaceId ~= 3260590327
+                and RuntimeGlobals.VIPVoteSkipVersionTDS
+                    == VIPVoteSkipVersion do
+                -- Once this API receives VoteSkip, keep honoring that request
+                -- even if the main farm flag is temporarily inactive.
+                local ownsRequest = VoteSkipConfigured
+                    and RuntimeGlobals.VIPVoteSkipOwner == VIPVoteSkipController
+                if IsStrategyRuntimeEnabled() or ownsRequest then
+                    UpdateVIPAutoSkip()
+                end
+                task.wait(0.1)
+            end
+
+            VIPVoteSkipWorkerRunning = false
+        end)
+    end
+
+    local function StartNormalVoteSkip()
+        if NormalVoteSkipWorkerRunning then
+            return
+        end
+
+        NormalVoteSkipWorkerRunning = true
+
+        task.spawn(function()
+            while IsStrategyRuntimeEnabled() do
+                local gameStateReplicator = GetDirectGameStateReplicator()
+
+                if not gameStateReplicator
+                    or gameStateReplicator:GetAttribute("GameOver") == true then
+
+                    task.wait(0.2)
+                    continue
+                end
+
+                local currentWave = GetCurrentWaveNoWait()
+
+                if currentWave and VoteSkipWaves[currentWave] then
+                    if CanNormalVoteSkip() then
+                        pcall(function()
+                            rf:InvokeServer("Voting", "Skip")
+                        end)
+
+                        task.wait(0.2)
+                    else
+                        task.wait(0.1)
+                    end
+                else
+                    task.wait(0.1)
+                end
+            end
+
+            NormalVoteSkipWorkerRunning = false
+        end)
+    end
+
+    function TDS:VoteSkip(startWave, endWave)
+        VoteSkipConfigured = true
+
+        if startWave == nil and endWave == nil then
+            VoteSkipAll = true
+
+            if HasVIP then
+                RuntimeGlobals.VIPVoteSkipOwner = VIPVoteSkipController
+                RuntimeGlobals.VIPVoteSkipOwnerKind = VIPVoteSkipKind
+                UpdateVIPAutoSkip()
+                StartVIPVoteSkip()
+            else
+                StartDirectAutoSkip()
+            end
+
+            return true
+        end
+
+        startWave = tonumber(startWave)
+
+        if not startWave then
+            return false
+        end
+
+        if endWave == nil then
+            endWave = startWave
+        else
+            endWave = tonumber(endWave)
+
+            if not endWave then
+                return false
+            end
+        end
+
+        startWave = math.floor(startWave)
+        endWave = math.floor(endWave)
+
+        if endWave < startWave then
+            startWave, endWave = endWave, startWave
+        end
+
+        for wave = startWave, endWave do
+            VoteSkipWaves[wave] = true
+        end
+
+        if HasVIP then
+            RuntimeGlobals.VIPVoteSkipOwner = VIPVoteSkipController
+            RuntimeGlobals.VIPVoteSkipOwnerKind = VIPVoteSkipKind
+            UpdateVIPAutoSkip()
+            StartVIPVoteSkip()
+        else
+            StartNormalVoteSkip()
+        end
+
+        return true
+    end
+
+    function TDS:Ready()
+        local ready = DirectReady()
+
+        -- VoteSkip can execute before Ready. Restore its requested VIP state
+        -- immediately after DirectReady observes GameStarted == true.
+        if ready and HasVIP and VoteSkipConfigured then
+            if RuntimeGlobals.VIPVoteSkipOwner == nil then
+                RuntimeGlobals.VIPVoteSkipOwner = VIPVoteSkipController
+                RuntimeGlobals.VIPVoteSkipOwnerKind = VIPVoteSkipKind
+            end
+
+            UpdateVIPAutoSkip()
+            StartVIPVoteSkip()
+        end
+
+        return ready
+    end
+
+    function TDS:Upgrade(index, path)
+        return DirectUpgradeTower(
+            tonumber(index),
+            tonumber(path) or 1
+        )
+    end
+
+    function TDS:UpgradeTimes(index, count, path)
+        index = tonumber(index)
+        count =
+            math.max(
+                math.floor(
+                    tonumber(count) or 0
+                ),
+                0
+            )
+        path = tonumber(path) or 1
+
+        if not index then
+            return false
+        end
+
+        for _ = 1, count do
+            if not DirectUpgradeTower(
+                index,
+                path
+            ) then
+                return false
+            end
+
+            task.wait(0.15)
+        end
+
+        return true
+    end
+
+    function TDS:Sell(index)
+        return DirectSellTower(
+            tonumber(index)
+        )
+    end
+
+    function TDS:UnlockTimeScale(targetSpeed)
+        local playerGui = plr:FindFirstChild("PlayerGui")
+        local hotbar = playerGui and playerGui:FindFirstChild("ReactUniversalHotbar")
+        local frame = hotbar and hotbar:FindFirstChild("Frame")
+        local timescale = frame and frame:FindFirstChild("timescale")
+
+        if not timescale or not timescale.Visible then
+            return false
+        end
+
+        local lock = timescale:FindFirstChild("Lock")
+
+        if lock and lock.Visible then
+            local tickets = plr:FindFirstChild("TimescaleTickets")
+
+            if not tickets or tickets.Value < 1 then
+                return false
+            end
+
+            local ok, result = pcall(function()
+                return rf:InvokeServer("TicketsManager", "UnlockTimeScale")
+            end)
+
+            if not ok or result == false then
+                return false
+            end
+
+            local deadline = os.clock() + 6
+
+            while lock.Parent and lock.Visible and os.clock() < deadline do
+                task.wait(0.1)
+            end
+
+            if lock.Parent and lock.Visible then
+                return false
+            end
+        end
+
+        if targetSpeed ~= nil then
+            return self:TimeScale(targetSpeed)
+        end
+
+        return true
+    end
+
+    function TDS:TimeScale(val)
+        local target = tonumber(val)
+        local validSpeeds = {0, 0.5, 1, 1.5, 2}
+        local valid = false
+
+        for _, speed in ipairs(validSpeeds) do
+            if speed == target then
+                valid = true
+                break
+            end
+        end
+
+        if not valid then
+            return false
+        end
+
+        local playerGui = plr:FindFirstChild("PlayerGui")
+        local hotbar = playerGui and playerGui:FindFirstChild("ReactUniversalHotbar")
+        local frame = hotbar and hotbar:FindFirstChild("Frame")
+        local timescale = frame and frame:FindFirstChild("timescale")
+        local speedLabel = timescale and timescale:FindFirstChild("Speed")
+
+        if not timescale or not timescale.Visible or not speedLabel then
+            return false
+        end
+
+        local lock = timescale:FindFirstChild("Lock")
+        local unlockDeadline = os.clock() + 6
+
+        while lock and lock.Parent and lock.Visible and os.clock() < unlockDeadline do
+            task.wait(0.1)
+        end
+
+        if lock and lock.Parent and lock.Visible then
+            return false
+        end
+
+        local function currentSpeed()
+            return tonumber(tostring(speedLabel.Text):match("x%s*([%d%.]+)"))
+        end
+
+        for _ = 1, #validSpeeds do
+            local before = currentSpeed()
+
+            if before == target then
+                return true
+            end
+
+            if before == nil then
+                return false
+            end
+
+            local ok, result = pcall(function()
+                return rf:InvokeServer("TicketsManager", "CycleTimeScale")
+            end)
+
+            if not ok or result == false then
+                return false
+            end
+
+            local deadline = os.clock() + 3
+            local after = currentSpeed()
+
+            while (after == nil or after == before) and os.clock() < deadline do
+                task.wait(0.05)
+                after = currentSpeed()
+            end
+
+            if after == nil or after == before then
+                return false
+            end
+
+            task.wait(0.2)
+
+            if currentSpeed() == target then
+                return true
+            end
+        end
+
+        return currentSpeed() == target
+    end
+
+    local function ParseWaveTimer(timer)
+        if type(timer) ~= "string" then
+            return nil
+        end
+
+        local minutes, seconds = timer:match("^(%d%d):([0-5]%d)$")
+        if minutes then
+            return tonumber(minutes) * 60 + tonumber(seconds)
+        end
+    end
+
+    local function GetWaveTimerText()
+        local frame = GetTopGameDisplayFrame()
+        local timer = frame and frame:FindFirstChild("waveTimer")
+        local container = timer and timer:FindFirstChild("container")
+        local label = container and container:FindFirstChild("value")
+        return label and label.Text
+    end
+
+    function TDS:WaitForWave(wave, timer)
+        local target = tonumber(wave) or 0
+        if timer == nil then
+            return DirectWaitForWave(target)
+        end
+
+        local targetSeconds = ParseWaveTimer(timer)
+        if targetSeconds == nil then
+            return false
+        end
+
+        while IsStrategyRuntimeEnabled() do
+            local currentWave = GetCurrentWaveNoWait()
+            if currentWave and currentWave > target then
+                return false
+            end
+
+            if currentWave == target then
+                local remaining = ParseWaveTimer(GetWaveTimerText())
+                if remaining and remaining <= targetSeconds then
+                    return true
+                end
+            end
+
+            task.wait(0.25)
+        end
+
+        return false
+    end
+
+    function TDS:SetTarget(index, targetType)
+        return DirectSetTarget(
+            tonumber(index),
+            targetType
+        )
+    end
+
+    function TDS:SetOption(index, name, value)
+        local tower =
+            TDS.PlacedTowers[
+                tonumber(index)
+            ]
+
+        if not tower
+            or not tower.Parent then
+
+            return false
+        end
+
+        while IsStrategyRuntimeEnabled() do
+            local ok, result =
+                pcall(function()
+                    return rf:InvokeServer(
+                        "Troops",
+                        "Option",
+                        "Set",
+                        {
+                            Troop = tower,
+                            Name = name,
+                            Value = value
+                        }
+                    )
+                end)
+
+            if ok
+                and DirectResponseOK(
+                    result
+                ) then
+
+                return true
+            end
+
+            local rep =
+                GetDirectGameStateReplicator()
+
+            if rep
+                and rep:GetAttribute(
+                    "GameOver"
+                ) == true then
+
+                return false
+            end
+
+            task.wait(0.25)
+        end
+
+        return false
+    end
+
+    function TDS:StackPosition(x, y, z, offset)
+        return Vector3.new(
+            tonumber(x) or 0,
+            (tonumber(y) or 0)
+                + (
+                    tonumber(offset)
+                    or 0
+                ) * 3.5,
+            tonumber(z) or 0
+        )
+    end
+
+    local MercenaryAutomationRunning = false
+    local MercenaryAutomationData = {
+        Dist = 195,
+        PathName = 1
+    }
+
+    function TDS:Mercenary(dist, pathName)
+        MercenaryAutomationData.Dist =
+            tonumber(dist)
+            or MercenaryAutomationData.Dist
+
+        MercenaryAutomationData.PathName =
+            tonumber(pathName)
+            or MercenaryAutomationData.PathName
+
+        if MercenaryAutomationRunning then
+            return true
+        end
+
+        local towerConfig =
+            type(StrategyConfig) == "table"
+            and type(StrategyConfig.Towers) == "table"
+            and type(StrategyConfig.Towers.Automation) == "table"
+            and StrategyConfig.Towers.Automation.Mercenary
+            or nil
+        local towerName = type(towerConfig) == "table" and tostring(towerConfig.Tower or "Mercenary Base") or "Mercenary Base"
+        local abilityName = type(towerConfig) == "table" and tostring(towerConfig.Ability or "Air-Drop") or "Air-Drop"
+        local minUpgrade = type(towerConfig) == "table" and tonumber(towerConfig.MinUpgrade) or 5
+        local interval = type(towerConfig) == "table" and tonumber(towerConfig.Interval) or 0.5
+
+        MercenaryAutomationRunning = true
+
+        task.spawn(function()
+            while IsStrategyRuntimeEnabled()
+                and TDS.AutoMercenaryEnabled ~= false do
+
+                local towersFolder =
+                    workspace:FindFirstChild(
+                        "Towers"
+                    )
+
+                if towersFolder then
+                    for _, towerRep in ipairs(
+                        towersFolder:GetDescendants()
+                    ) do
+                        if towerRep:IsA("Folder")
+                            and towerRep.Name
+                                == "TowerReplicator"
+                            and towerRep:GetAttribute(
+                                "Name"
+                            ) == towerName
+                            and towerRep:GetAttribute(
+                                "OwnerId"
+                            ) == plr.UserId
+                            and (
+                                tonumber(
+                                    towerRep:GetAttribute(
+                                        "Upgrade"
+                                    )
+                                )
+                                or 0
+                            ) >= minUpgrade then
+
+                            pcall(function()
+                                rf:InvokeServer(
+                                    "Troops",
+                                    "Abilities",
+                                    "Activate",
+                                    {
+                                        Troop =
+                                            towerRep.Parent,
+                                        Name =
+                                            abilityName,
+                                        Data = {
+                                            pathName =
+                                                MercenaryAutomationData.PathName,
+                                            directionCFrame =
+                                                CFrame.new(),
+                                            dist =
+                                                MercenaryAutomationData.Dist
+                                        }
+                                    }
+                                )
+                            end)
+
+                            task.wait(interval)
+                        end
+                    end
+                end
+
+                task.wait(interval)
+            end
+
+            MercenaryAutomationRunning = false
+        end)
+
+        return true
+    end
+
+    local function ReadEquippedSupportTowers()
+        local reps = ReplicatedStorage:FindFirstChild("StateReplicators")
+        if not reps then return nil end
+        for _, rep in ipairs(reps:GetChildren()) do
+            if tonumber(rep:GetAttribute("UserId")) == plr.UserId then
+                local raw = rep:GetAttribute("EquippedTowers")
+                local json = type(raw) == "string" and raw:match("%[.*%]")
+                if not json then return nil end
+                local ok, towers = pcall(HttpService.JSONDecode, HttpService, json)
+                if not ok or type(towers) ~= "table" then return nil end
+                local equipped = {}
+                for _, name in ipairs(towers) do
+                    if type(name) == "string" then equipped[name] = true end
+                end
+                return equipped
+            end
+        end
+        return nil
+    end
+
+    RuntimeGlobals.API1EquippedWatchVersion =
+        (tonumber(RuntimeGlobals.API1EquippedWatchVersion) or 0) + 1
+    local watchVersion = RuntimeGlobals.API1EquippedWatchVersion
+    task.spawn(function()
+        while RuntimeGlobals.API1EquippedWatchVersion == watchVersion do
+            local state = GetDirectGameStateReplicator()
+            if state
+                and state:GetAttribute("GameStarted") == true
+                and state:GetAttribute("GameOver") ~= true then
+                local equipped = ReadEquippedSupportTowers()
+                if equipped then
+                    TowerAutoFlags.Commander = equipped.Commander == true
+                    TowerAutoFlags.DJ = equipped["DJ Booth"] == true
+                    TDS.HasMercenaryBase = equipped["Mercenary Base"] == true
+                    if TowerAutoFlags.Commander then StartSupportAuto("Commander") end
+                    if TowerAutoFlags.DJ then StartSupportAuto("DJ") end
+                    if TDS.HasMercenaryBase and TDS.AutoMercenaryEnabled ~= false then
+                        TDS:Mercenary()
+                    end
+                end
+            else
+                TowerAutoFlags.Commander = false
+                TowerAutoFlags.DJ = false
+                TDS.HasMercenaryBase = false
+            end
+            task.wait(0.5)
+        end
+    end)
+
+    function TDS:Ability(index, abilityName, data, loop)
+        index =
+            tonumber(index)
+    
+        if type(data) == "boolean" then
+            loop = data
+            data = nil
+        end
+    
+        data =
+            type(data) == "table"
+            and data
+            or nil
+    
+        local function Activate()
+            while IsStrategyRuntimeEnabled() do
+                local tower =
+                    TDS.PlacedTowers[
+                        index
+                    ]
+    
+                if not tower
+                    or not tower.Parent then
+    
+                    return false
+                end
+    
+                local payload =
+                    data
+                    and table.clone(data)
+                    or nil
+    
+                if payload then
+                    if type(
+                        payload.towerToClone
+                    ) == "number" then
+    
+                        payload.towerToClone =
+                            TDS.PlacedTowers[
+                                payload.towerToClone
+                            ]
+                    end
+    
+                    if type(
+                        payload.towerTarget
+                    ) == "number" then
+    
+                        payload.towerTarget =
+                            TDS.PlacedTowers[
+                                payload.towerTarget
+                            ]
+                    end
+    
+                    if type(
+                        payload.towerPosition
+                    ) == "table"
+                        and #payload.towerPosition > 0 then
+    
+                        payload.towerPosition =
+                            payload.towerPosition[
+                                math.random(
+                                    #payload.towerPosition
+                                )
+                            ]
+                    end
+                end
+    
+                local ok, result =
+                    pcall(function()
+                        return rf:InvokeServer(
+                            "Troops",
+                            "Abilities",
+                            "Activate",
+                            {
+                                Troop = tower,
+                                Name = abilityName,
+                                Data = payload
+                            }
+                        )
+                    end)
+    
+                if ok
+                    and DirectResponseOK(result) then
+    
+                    return true
+                end
+    
+                task.wait(0.25)
+            end
+    
+            return false
+        end
+    
+        if loop == true then
+            local active = true
+    
+            task.spawn(function()
+                while active
+                    and IsStrategyRuntimeEnabled() do
+    
+                    Activate()
+                    task.wait(1)
+                end
+            end)
+    
+            return function()
+                active = false
+            end
+        end
+    
+        return Activate()
+    end
+    
+    function TDS:LoopAbility(index, abilityName, data)
+        return TDS:Ability(
+            index,
+            abilityName,
+            data,
+            true
+        )
+    end
+    
+
+
+    if HasVIP and game.PlaceId ~= 3260590327 then
+        StartVIPVoteSkip()
+    end
+
+    shared.TDSTable = TDS
+    shared["TDS_Table"] = TDS
+
+    local MedicChainAPI
+
+    function TDS:MedicChain(...)
+        if not MedicChainAPI then
+            local loaded = loadstring(game:HttpGet(
+                "https://raw.githubusercontent.com/Ceepizz/rya/refs/heads/main/api"
+            ))()
+
+            if type(loaded) == "table"
+                and type(loaded.MedicChain) == "function" then
+
+                MedicChainAPI = loaded.MedicChain
+
+            elseif type(loaded) == "function" then
+                MedicChainAPI = loaded
+
+            else
+                warn("[MedicChain] Failed to load API")
+                return false
+            end
+        end
+
+        return MedicChainAPI(self, ...)
+    end
+
+    return TDS
+end
