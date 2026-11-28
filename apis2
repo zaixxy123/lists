@@ -909,19 +909,18 @@ local function StartVIPVoteSkip()
     VIPVoteSkipWorkerRunning = true
 
     task.spawn(function()
-        -- Farm toggles can briefly be false during the first-match startup.
-        -- Keep the controller alive; only enforce while its mode is active.
-        while RuntimeGlobals.VIPVoteSkipVersionApis2
-            == VIPVoteSkipVersion do
+        while IsStrategyRuntimeEnabled()
+            and RuntimeGlobals.VIPVoteSkipVersionApis2
+                == VIPVoteSkipVersion do
 
-            if IsStrategyRuntimeEnabled()
-                and (not VIPVoteSkipStartedUnderAutoStrategy
-                    or RuntimeGlobals.AutoStrategyEnabled == true) then
-                UpdateVIPAutoSkip()
-                task.wait(0.1)
-            else
-                task.wait(0.25)
+            if VIPVoteSkipStartedUnderAutoStrategy
+                and RuntimeGlobals.AutoStrategyEnabled ~= true then
+
+                break
             end
+
+            UpdateVIPAutoSkip()
+            task.wait(0.1)
         end
 
         VIPVoteSkipWorkerRunning = false
