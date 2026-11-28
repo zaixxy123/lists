@@ -653,8 +653,11 @@ RuntimeGlobals.VIPVoteSkipVersion =
         RuntimeGlobals.VIPVoteSkipVersion
     ) or 0) + 1
 
-local VIPVoteSkipVersion =
-    RuntimeGlobals.VIPVoteSkipVersion
+-- Separate worker generations so loading another API cannot kill this worker.
+RuntimeGlobals.VIPVoteSkipVersionApis2 =
+    (tonumber(RuntimeGlobals.VIPVoteSkipVersionApis2) or 0) + 1
+local VIPVoteSkipVersion = RuntimeGlobals.VIPVoteSkipVersionApis2
+local VIPVoteSkipController = {}
 
 local VIPVoteSkipStartedUnderAutoStrategy =
     RuntimeGlobals.AutoStrategyEnabled == true
@@ -866,8 +869,14 @@ local function TryGetCurrentWave()
 end
 
 local function UpdateVIPAutoSkip()
-    -- A strategy must execute VoteSkip before it can enable VIP Auto Skip.
-    -- Do not let an old forced-skip setting override this.
+    -- Only the API whose VoteSkip was called can manage the active wave list.
+    -- Before any VoteSkip call, all controllers keep Auto Skip disabled.
+    local owner = RuntimeGlobals.VIPVoteSkipOwner
+    if owner ~= VIPVoteSkipController then
+        if owner == nil then SetAutoSkip(false) end
+        return
+    end
+
     if not VoteSkipConfigured then
         SetAutoSkip(false)
         return
@@ -907,7 +916,7 @@ local function StartVIPVoteSkip()
 
     task.spawn(function()
         while IsStrategyRuntimeEnabled()
-            and RuntimeGlobals.VIPVoteSkipVersion
+            and RuntimeGlobals.VIPVoteSkipVersionApis2
                 == VIPVoteSkipVersion do
 
             if VIPVoteSkipStartedUnderAutoStrategy
@@ -939,6 +948,7 @@ local function IsAutoFarmModeActive()
 end
 
 if HasVIP and IsAutoFarmModeActive() then
+    RuntimeGlobals.VIPVoteSkipOwner = nil
     UpdateVIPAutoSkip()
     StartVIPVoteSkip()
 end
@@ -1095,6 +1105,7 @@ function TDS:ResetIndex()
     SkipMode = nil
 
     if HasVIP then
+        RuntimeGlobals.VIPVoteSkipOwner = nil
         SetAutoSkip(false)
         StartVIPVoteSkip()
     end
@@ -2149,6 +2160,7 @@ function TDS:VoteSkip(startWave, endWave)
         VoteSkipAll = true
 
         if HasVIP then
+            RuntimeGlobals.VIPVoteSkipOwner = VIPVoteSkipController
             UpdateVIPAutoSkip()
             StartVIPVoteSkip()
         else
@@ -2186,6 +2198,7 @@ function TDS:VoteSkip(startWave, endWave)
     end
 
     if HasVIP then
+        RuntimeGlobals.VIPVoteSkipOwner = VIPVoteSkipController
         UpdateVIPAutoSkip()
         StartVIPVoteSkip()
     else
