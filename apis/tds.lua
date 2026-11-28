@@ -1542,6 +1542,13 @@ return function(Context)
     
 
 
+    -- Start with VIP Auto Skip disabled before any strategy's VoteSkip line.
+    -- ResetIndex also starts this worker for strategies loaded later.
+    if HasVIP and IsStrategyRuntimeEnabled() then
+        UpdateVIPAutoSkip()
+        StartVIPVoteSkip()
+    end
+
     shared.TDSTable = TDS
     shared["TDS_Table"] = TDS
 
