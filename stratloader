@@ -769,6 +769,134 @@ return function(Context)
             )
     end
 
+    -- Delete only a locally saved strategy from the AutoStrategy folder.
+    -- A second click on the same file within 10 seconds confirms deletion.
+    local DeleteStrategyButton
+    local DeletePendingPath = nil
+    local DeletePendingAt = 0
+
+    local function ClearDeleteConfirmation()
+        DeletePendingPath = nil
+        DeletePendingAt = 0
+        if DeleteStrategyButton then
+            DeleteStrategyButton:SetText("Delete")
+            if DeleteStrategyButton.SetDesc then
+                DeleteStrategyButton:SetDesc(
+                    "Delete the selected local strategy file. Confirmation required."
+                )
+            end
+        end
+    end
+
+    local function IsListedStrategyFile(path)
+        local files, err = ScanFiles()
+        if not files then
+            return false, "Could not verify strategy files: " .. tostring(err)
+        end
+
+        local requested = tostring(path or ""):gsub("\\", "/")
+        for _, candidate in ipairs(files) do
+            if tostring(candidate):gsub("\\", "/") == requested then
+                return true
+            end
+        end
+
+        return false, "The selected file is not in AutoStrategy."
+    end
+
+    DeleteStrategyButton = AutoStrategy:Button({
+        Title = "Delete Selected Strategy",
+        Desc = "Delete the selected local strategy file. Confirmation required.",
+        Text = "Delete",
+        Callback = function()
+            if Globals.AutoStrategyEnabled == true
+                or Globals.AutoStrategyResumeAfterLobby == true
+                or Saved.Enabled == true
+                or RunningStrategyFile ~= nil then
+
+                ClearDeleteConfirmation()
+                Notify("Turn off Auto Strategy before deleting files.", 5)
+                return
+            end
+
+            local fileDeleter =
+                type(delfile) == "function" and delfile
+                or type(deletefile) == "function" and deletefile
+                or nil
+
+            if not fileDeleter then
+                ClearDeleteConfirmation()
+                Notify("File deletion is not supported by this executor.", 5)
+                return
+            end
+
+            local path = SelectedStrategyFile
+            if type(path) ~= "string" or path == "" then
+                ClearDeleteConfirmation()
+                Notify("Select a strategy file to delete.", 4)
+                return
+            end
+
+            local isListed, reason = IsListedStrategyFile(path)
+            if not isListed then
+                ClearDeleteConfirmation()
+                Notify(reason, 5)
+                RefreshFiles()
+                return
+            end
+
+            local now = os.clock()
+            if DeletePendingPath ~= path
+                or now - DeletePendingAt > 10 then
+
+                DeletePendingPath = path
+                DeletePendingAt = now
+                DeleteStrategyButton:SetText("Confirm")
+                if DeleteStrategyButton.SetDesc then
+                    DeleteStrategyButton:SetDesc(
+                        "Confirm deleting " .. GetFileName(path) .. " within 10 seconds."
+                    )
+                end
+                Notify(
+                    "Click Confirm to permanently delete " .. GetFileName(path) .. ".",
+                    5
+                )
+
+                task.delay(10, function()
+                    if DeletePendingPath == path
+                        and DeletePendingAt == now then
+
+                        ClearDeleteConfirmation()
+                    end
+                end)
+                return
+            end
+
+            -- Revalidate immediately before deleting in case the file list changed.
+            isListed, reason = IsListedStrategyFile(path)
+            if not isListed then
+                ClearDeleteConfirmation()
+                Notify(reason, 5)
+                RefreshFiles()
+                return
+            end
+
+            local ok, err = pcall(fileDeleter, path)
+            if not ok or (type(isfile) == "function" and isfile(path)) then
+                ClearDeleteConfirmation()
+                Notify("Failed to delete " .. GetFileName(path) .. ": " .. tostring(err), 5)
+                return
+            end
+
+            ClearDeleteConfirmation()
+            SelectedStrategyFile = nil
+            Saved.SelectedFile = ""
+            Save()
+            RefreshFiles()
+            Notify("Deleted " .. GetFileName(path) .. ".", 4)
+        end
+    })
+
     local IgnoreAutoStrategyToggleCallbacks = 0
 
     local function SetToggleVisual(value)
