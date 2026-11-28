@@ -45,6 +45,13 @@ return function(Context)
         (tonumber(RuntimeGlobals.VIPVoteSkipVersionTDS) or 0) + 1
     local VIPVoteSkipVersion = RuntimeGlobals.VIPVoteSkipVersionTDS
     local VIPVoteSkipController = {}
+    local VIPVoteSkipKind = "tds"
+
+    -- Re-executing this API invalidates its old worker, not the other API.
+    if RuntimeGlobals.VIPVoteSkipOwnerKind == VIPVoteSkipKind then
+        RuntimeGlobals.VIPVoteSkipOwner = nil
+        RuntimeGlobals.VIPVoteSkipOwnerKind = nil
+    end
 
     local HasVIP = Context.HasVIP
 
@@ -292,7 +299,10 @@ return function(Context)
         if HasVIP
             and SetAutoSkip then
 
-            RuntimeGlobals.VIPVoteSkipOwner = nil
+            if RuntimeGlobals.VIPVoteSkipOwner == VIPVoteSkipController then
+                RuntimeGlobals.VIPVoteSkipOwner = nil
+                RuntimeGlobals.VIPVoteSkipOwnerKind = nil
+            end
             if not VIPMatchStarted() then
                 SetAutoSkip(false)
             end
@@ -959,6 +969,7 @@ return function(Context)
 
             if HasVIP then
                 RuntimeGlobals.VIPVoteSkipOwner = VIPVoteSkipController
+                RuntimeGlobals.VIPVoteSkipOwnerKind = VIPVoteSkipKind
                 UpdateVIPAutoSkip()
                 StartVIPVoteSkip()
             else
@@ -997,6 +1008,7 @@ return function(Context)
 
         if HasVIP then
             RuntimeGlobals.VIPVoteSkipOwner = VIPVoteSkipController
+            RuntimeGlobals.VIPVoteSkipOwnerKind = VIPVoteSkipKind
             UpdateVIPAutoSkip()
             StartVIPVoteSkip()
         else
