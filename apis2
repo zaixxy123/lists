@@ -866,12 +866,8 @@ local function TryGetCurrentWave()
 end
 
 local function UpdateVIPAutoSkip()
-    if RuntimeGlobals.AutoStrategyEnabled == true
-        and RuntimeGlobals.AutoStrategyForceAutoSkip == true then
-
-        return
-    end
-
+    -- A strategy must execute VoteSkip before it can enable VIP Auto Skip.
+    -- Do not let an old forced-skip setting override this.
     if not VoteSkipConfigured then
         SetAutoSkip(false)
         return
@@ -928,9 +924,22 @@ local function StartVIPVoteSkip()
     end)
 end
 
-if HasVIP
-    and VIPVoteSkipStartedUnderAutoStrategy then
+-- Begin monitoring before VoteSkip is reached. Until then, the VIP
+-- setting stays disabled, including when a previous match left it on.
+local function IsAutoFarmModeActive()
+    return RuntimeGlobals.AutoStrategyEnabled == true
+        or RuntimeGlobals.AutoProgressEnabled == true
+        or RuntimeGlobals.AutoBuyAllTowersEnabled == true
+        or RuntimeGlobals.AutoMaxEnabled == true
+        or RuntimeGlobals.AutoFarmTowerXP == true
+        or RuntimeGlobals.CurrencyFarmEnabled == true
+        or RuntimeGlobals.AutoEventEnabled == true
+        or RuntimeGlobals.AutoArcadeEnabled == true
+        or RuntimeGlobals.AutoSolarRequiemEnabled == true
+end
 
+if HasVIP and IsAutoFarmModeActive() then
+    UpdateVIPAutoSkip()
     StartVIPVoteSkip()
 end
 
@@ -1087,6 +1096,7 @@ function TDS:ResetIndex()
 
     if HasVIP then
         SetAutoSkip(false)
+        StartVIPVoteSkip()
     end
 end
 
