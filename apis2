@@ -653,11 +653,8 @@ RuntimeGlobals.VIPVoteSkipVersion =
         RuntimeGlobals.VIPVoteSkipVersion
     ) or 0) + 1
 
--- Separate worker generations so loading another API cannot kill this worker.
-RuntimeGlobals.VIPVoteSkipVersionApis2 =
-    (tonumber(RuntimeGlobals.VIPVoteSkipVersionApis2) or 0) + 1
-local VIPVoteSkipVersion = RuntimeGlobals.VIPVoteSkipVersionApis2
-local VIPVoteSkipController = {}
+local VIPVoteSkipVersion =
+    RuntimeGlobals.VIPVoteSkipVersion
 
 local VIPVoteSkipStartedUnderAutoStrategy =
     RuntimeGlobals.AutoStrategyEnabled == true
@@ -869,10 +866,14 @@ local function TryGetCurrentWave()
 end
 
 local function UpdateVIPAutoSkip()
-    -- Only the API whose VoteSkip was called can manage the active wave list.
-    -- Before any VoteSkip call, all controllers keep Auto Skip disabled.
-    if RuntimeGlobals.VIPVoteSkipOwner ~= VIPVoteSkipController
-        or not VoteSkipConfigured then
+    if RuntimeGlobals.AutoStrategyEnabled == true
+        and RuntimeGlobals.AutoStrategyForceAutoSkip == true then
+
+        return
+    end
+
+    if not VoteSkipConfigured then
+        SetAutoSkip(false)
         return
     end
 
@@ -910,7 +911,7 @@ local function StartVIPVoteSkip()
 
     task.spawn(function()
         while IsStrategyRuntimeEnabled()
-            and RuntimeGlobals.VIPVoteSkipVersionApis2
+            and RuntimeGlobals.VIPVoteSkipVersion
                 == VIPVoteSkipVersion do
 
             if VIPVoteSkipStartedUnderAutoStrategy
@@ -927,26 +928,9 @@ local function StartVIPVoteSkip()
     end)
 end
 
--- Begin monitoring before VoteSkip is reached. Until then, the VIP
--- setting stays disabled, including when a previous match left it on.
-local function IsAutoFarmModeActive()
-    return RuntimeGlobals.AutoStrategyEnabled == true
-        or RuntimeGlobals.AutoProgressEnabled == true
-        or RuntimeGlobals.AutoBuyAllTowersEnabled == true
-        or RuntimeGlobals.AutoMaxEnabled == true
-        or RuntimeGlobals.AutoFarmTowerXP == true
-        or RuntimeGlobals.CurrencyFarmEnabled == true
-        or RuntimeGlobals.AutoEventEnabled == true
-        or RuntimeGlobals.AutoArcadeEnabled == true
-        or RuntimeGlobals.AutoSolarRequiemEnabled == true
-end
+if HasVIP
+    and VIPVoteSkipStartedUnderAutoStrategy then
 
-if HasVIP and IsAutoFarmModeActive() then
-    -- Clear any leftover Auto Skip once when the farm starts. After
-    -- VoteSkip() claims ownership, another API must not force it off.
-    if RuntimeGlobals.VIPVoteSkipOwner == nil then
-        SetAutoSkip(false)
-    end
     StartVIPVoteSkip()
 end
 
@@ -1102,9 +1086,7 @@ function TDS:ResetIndex()
     SkipMode = nil
 
     if HasVIP then
-        RuntimeGlobals.VIPVoteSkipOwner = nil
         SetAutoSkip(false)
-        StartVIPVoteSkip()
     end
 end
 
@@ -2157,7 +2139,6 @@ function TDS:VoteSkip(startWave, endWave)
         VoteSkipAll = true
 
         if HasVIP then
-            RuntimeGlobals.VIPVoteSkipOwner = VIPVoteSkipController
             UpdateVIPAutoSkip()
             StartVIPVoteSkip()
         else
@@ -2195,7 +2176,6 @@ function TDS:VoteSkip(startWave, endWave)
     end
 
     if HasVIP then
-        RuntimeGlobals.VIPVoteSkipOwner = VIPVoteSkipController
         UpdateVIPAutoSkip()
         StartVIPVoteSkip()
     else
