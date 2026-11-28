@@ -2636,10 +2636,11 @@ local function BuildTowerLevelsField(targets)
 
     local lines = {}
     for _, tower in ipairs(targets) do
-        local exp = tonumber(xp[tower.Key]) or tonumber(normalizedXP[normalize(tower.Key)])
-        if exp == nil then
-            lines[#lines + 1] = "┃ " .. tower.Name .. ": **Unavailable**"
-        else
+        -- Towers with no XP yet may be absent from TowerExp entirely.
+        -- A missing tower entry means 0 XP, not an unavailable level.
+        local exp = tonumber(xp[tower.Key])
+            or tonumber(normalizedXP[normalize(tower.Key)])
+            or 0
         local isEvolved = tostring(tower.Key):sub(1, 7) == "Evolved"
         local base = isEvolved and 75 or 50
         local rate = isEvolved and 1.075 or 1.09
@@ -2652,7 +2653,6 @@ local function BuildTowerLevelsField(targets)
         lines[#lines + 1] = "┃ " .. tower.Name .. ": **"
             .. (level == 20 and "MAX LEVEL" or tostring(level) .. "/20")
             .. "**"
-        end
     end
     return table.concat(lines, "\n")
 end
