@@ -878,12 +878,17 @@ return function(Context)
         VIPVoteSkipWorkerRunning = true
 
         task.spawn(function()
-            while IsStrategyRuntimeEnabled()
-                and RuntimeGlobals.VIPVoteSkipVersionTDS
-                    == VIPVoteSkipVersion do
+            -- A momentary inactive farm flag on the first match must not
+            -- kill this worker before VoteSkip can keep Auto Skip enabled.
+            while RuntimeGlobals.VIPVoteSkipVersionTDS
+                == VIPVoteSkipVersion do
 
-                UpdateVIPAutoSkip()
-                task.wait(0.1)
+                if IsStrategyRuntimeEnabled() then
+                    UpdateVIPAutoSkip()
+                    task.wait(0.1)
+                else
+                    task.wait(0.25)
+                end
             end
 
             VIPVoteSkipWorkerRunning = false
