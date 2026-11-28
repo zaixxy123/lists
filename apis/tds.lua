@@ -1019,7 +1019,21 @@ return function(Context)
     end
 
     function TDS:Ready()
-        return DirectReady()
+        local ready = DirectReady()
+
+        -- VoteSkip can execute before Ready. Restore its requested VIP state
+        -- immediately after DirectReady observes GameStarted == true.
+        if ready and HasVIP and VoteSkipConfigured then
+            if RuntimeGlobals.VIPVoteSkipOwner == nil then
+                RuntimeGlobals.VIPVoteSkipOwner = VIPVoteSkipController
+                RuntimeGlobals.VIPVoteSkipOwnerKind = VIPVoteSkipKind
+            end
+
+            UpdateVIPAutoSkip()
+            StartVIPVoteSkip()
+        end
+
+        return ready
     end
 
     function TDS:Upgrade(index, path)
