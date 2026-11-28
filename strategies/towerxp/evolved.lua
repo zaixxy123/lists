@@ -170,7 +170,7 @@ if loadoutTower ~= "None" then
     TDS:Place(loadoutTower, -2.9802374839782715, 0.986655592918396, -32.875785827636719)
 end
 if loadoutTower2 ~= "None" then
-    TDS:Place(loadoutTower2, -9.3328819274902344, 0.98418515920639038, -31.453096389770508)
+    TDS:Place(loadoutTower2, 12.01744270324707, 1.019282341003418, 20.110275268554688)
 end
 
     return true
