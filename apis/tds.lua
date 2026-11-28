@@ -275,6 +275,7 @@ return function(Context)
     local VoteSkipAll = false
     local VoteSkipConfigured = false
     local VIPVoteSkipWorkerRunning = false
+    local VIPMatchStarted
     local NormalVoteSkipWorkerRunning = false
     local SetAutoSkip
     local StartVIPVoteSkip
@@ -292,7 +293,9 @@ return function(Context)
             and SetAutoSkip then
 
             RuntimeGlobals.VIPVoteSkipOwner = nil
-            SetAutoSkip(false)
+            if not VIPMatchStarted() then
+                SetAutoSkip(false)
+            end
 
             if StartVIPVoteSkip then
                 StartVIPVoteSkip()
@@ -844,7 +847,7 @@ return function(Context)
             and voteButton.Position == UDim2.new(0.5, 0, 0.5, 0)
     end
 
-    local function VIPMatchStarted()
+    VIPMatchStarted = function()
         local rep = GetDirectGameStateReplicator()
         return rep ~= nil
             and rep:GetAttribute("GameStarted") == true
@@ -863,8 +866,8 @@ return function(Context)
             return
         end
 
+        -- Once the game starts, leave the setting unchanged until VoteSkip.
         if not VoteSkipConfigured or owner ~= VIPVoteSkipController then
-            SetAutoSkip(false)
             return
         end
 
