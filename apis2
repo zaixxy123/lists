@@ -653,6 +653,13 @@ RuntimeGlobals.VIPVoteSkipVersionApis2 =
     (tonumber(RuntimeGlobals.VIPVoteSkipVersionApis2) or 0) + 1
 local VIPVoteSkipVersion = RuntimeGlobals.VIPVoteSkipVersionApis2
 local VIPVoteSkipController = {}
+local VIPVoteSkipKind = "apis2"
+
+-- Re-executing this API invalidates its old worker, not the other API.
+if RuntimeGlobals.VIPVoteSkipOwnerKind == VIPVoteSkipKind then
+    RuntimeGlobals.VIPVoteSkipOwner = nil
+    RuntimeGlobals.VIPVoteSkipOwnerKind = nil
+end
 
 local function GetAutoSkipButton()
     local settings =
@@ -1092,7 +1099,10 @@ function TDS:ResetIndex()
     SkipMode = nil
 
     if HasVIP then
-        RuntimeGlobals.VIPVoteSkipOwner = nil
+        if RuntimeGlobals.VIPVoteSkipOwner == VIPVoteSkipController then
+            RuntimeGlobals.VIPVoteSkipOwner = nil
+            RuntimeGlobals.VIPVoteSkipOwnerKind = nil
+        end
         if not VIPMatchStarted() then
             SetAutoSkip(false)
         end
@@ -2150,6 +2160,7 @@ function TDS:VoteSkip(startWave, endWave)
 
         if HasVIP then
             RuntimeGlobals.VIPVoteSkipOwner = VIPVoteSkipController
+            RuntimeGlobals.VIPVoteSkipOwnerKind = VIPVoteSkipKind
             UpdateVIPAutoSkip()
             StartVIPVoteSkip()
         else
@@ -2188,6 +2199,7 @@ function TDS:VoteSkip(startWave, endWave)
 
     if HasVIP then
         RuntimeGlobals.VIPVoteSkipOwner = VIPVoteSkipController
+        RuntimeGlobals.VIPVoteSkipOwnerKind = VIPVoteSkipKind
         UpdateVIPAutoSkip()
         StartVIPVoteSkip()
     else
