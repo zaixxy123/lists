@@ -648,16 +648,10 @@ local VIPVoteSkipWorkerRunning = false
 
 local RuntimeGlobals = getgenv()
 
-RuntimeGlobals.VIPVoteSkipVersion =
-    (tonumber(
-        RuntimeGlobals.VIPVoteSkipVersion
-    ) or 0) + 1
-
-local VIPVoteSkipVersion =
-    RuntimeGlobals.VIPVoteSkipVersion
-
-local VIPVoteSkipStartedUnderAutoStrategy =
-    RuntimeGlobals.AutoStrategyEnabled == true
+RuntimeGlobals.VIPVoteSkipVersionApis2 =
+    (tonumber(RuntimeGlobals.VIPVoteSkipVersionApis2) or 0) + 1
+local VIPVoteSkipVersion = RuntimeGlobals.VIPVoteSkipVersionApis2
+local VIPVoteSkipController = {}
 
 local function GetAutoSkipButton()
     local settings =
@@ -865,14 +859,27 @@ local function TryGetCurrentWave()
     )
 end
 
-local function UpdateVIPAutoSkip()
-    if RuntimeGlobals.AutoStrategyEnabled == true
-        and RuntimeGlobals.AutoStrategyForceAutoSkip == true then
+local function VIPMatchStarted()
+    local rep = GetDirectGameStateReplicator()
+    return rep ~= nil
+        and rep:GetAttribute("GameStarted") == true
+        and rep:GetAttribute("GameOver") ~= true
+end
 
+local function UpdateVIPAutoSkip()
+    -- TDS:Ready() only starts the countdown. Do not enable until
+    -- the match itself has started.
+    if not VIPMatchStarted() then
+        SetAutoSkip(false)
         return
     end
 
-    if not VoteSkipConfigured then
+    local owner = RuntimeGlobals.VIPVoteSkipOwner
+    if owner ~= nil and owner ~= VIPVoteSkipController then
+        return
+    end
+
+    if not VoteSkipConfigured or owner ~= VIPVoteSkipController then
         SetAutoSkip(false)
         return
     end
@@ -910,17 +917,13 @@ local function StartVIPVoteSkip()
     VIPVoteSkipWorkerRunning = true
 
     task.spawn(function()
-        while IsStrategyRuntimeEnabled()
-            and RuntimeGlobals.VIPVoteSkipVersion
+        -- Keep the worker present through the first match and restarts.
+        while game.PlaceId ~= LOBBY_PLACE_ID
+            and RuntimeGlobals.VIPVoteSkipVersionApis2
                 == VIPVoteSkipVersion do
-
-            if VIPVoteSkipStartedUnderAutoStrategy
-                and RuntimeGlobals.AutoStrategyEnabled ~= true then
-
-                break
+            if IsStrategyRuntimeEnabled() then
+                UpdateVIPAutoSkip()
             end
-
-            UpdateVIPAutoSkip()
             task.wait(0.1)
         end
 
@@ -928,9 +931,7 @@ local function StartVIPVoteSkip()
     end)
 end
 
-if HasVIP
-    and VIPVoteSkipStartedUnderAutoStrategy then
-
+if HasVIP and game.PlaceId ~= LOBBY_PLACE_ID then
     StartVIPVoteSkip()
 end
 
@@ -1086,7 +1087,9 @@ function TDS:ResetIndex()
     SkipMode = nil
 
     if HasVIP then
+        RuntimeGlobals.VIPVoteSkipOwner = nil
         SetAutoSkip(false)
+        StartVIPVoteSkip()
     end
 end
 
@@ -2139,6 +2142,7 @@ function TDS:VoteSkip(startWave, endWave)
         VoteSkipAll = true
 
         if HasVIP then
+            RuntimeGlobals.VIPVoteSkipOwner = VIPVoteSkipController
             UpdateVIPAutoSkip()
             StartVIPVoteSkip()
         else
@@ -2176,6 +2180,7 @@ function TDS:VoteSkip(startWave, endWave)
     end
 
     if HasVIP then
+        RuntimeGlobals.VIPVoteSkipOwner = VIPVoteSkipController
         UpdateVIPAutoSkip()
         StartVIPVoteSkip()
     else
