@@ -850,14 +850,8 @@ return function(Context)
 
     local function UpdateVIPAutoSkip()
         -- Another API's VoteSkip must take priority over our default OFF state.
-        local owner = RuntimeGlobals.VIPVoteSkipOwner
-        if owner ~= VIPVoteSkipController then
-            if owner == nil then SetAutoSkip(false) end
-            return
-        end
-
-        if not VoteSkipConfigured then
-            SetAutoSkip(false)
+        if RuntimeGlobals.VIPVoteSkipOwner ~= VIPVoteSkipController
+            or not VoteSkipConfigured then
             return
         end
 
@@ -1558,8 +1552,11 @@ return function(Context)
     -- Start with VIP Auto Skip disabled before any strategy's VoteSkip line.
     -- ResetIndex also starts this worker for strategies loaded later.
     if HasVIP and IsStrategyRuntimeEnabled() then
-        RuntimeGlobals.VIPVoteSkipOwner = nil
-        UpdateVIPAutoSkip()
+        -- Only disable Auto Skip at startup if no API has claimed it.
+        -- VoteSkip() must be able to turn it back on later in the match.
+        if RuntimeGlobals.VIPVoteSkipOwner == nil then
+            SetAutoSkip(false)
+        end
         StartVIPVoteSkip()
     end
 
