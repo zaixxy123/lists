@@ -2651,9 +2651,12 @@ local function BuildTowerLevelsField(targets)
         if exp == nil then
             lines[#lines + 1] = "┃ " .. tower.Name .. ": **Unavailable**"
         else
+        local isEvolved = tostring(tower.Key):sub(1, 7) == "Evolved"
+        local base = isEvolved and 75 or 50
+        local rate = isEvolved and 1.075 or 1.09
         local level, required = 0, 0
         for i = 1, 20 do
-            required += math.floor(75 * 1.075 ^ (i - 1))
+            required += math.floor(base * rate ^ (i - 1))
             if exp < required then break end
             level = i
         end
