@@ -871,14 +871,8 @@ end
 local function UpdateVIPAutoSkip()
     -- Only the API whose VoteSkip was called can manage the active wave list.
     -- Before any VoteSkip call, all controllers keep Auto Skip disabled.
-    local owner = RuntimeGlobals.VIPVoteSkipOwner
-    if owner ~= VIPVoteSkipController then
-        if owner == nil then SetAutoSkip(false) end
-        return
-    end
-
-    if not VoteSkipConfigured then
-        SetAutoSkip(false)
+    if RuntimeGlobals.VIPVoteSkipOwner ~= VIPVoteSkipController
+        or not VoteSkipConfigured then
         return
     end
 
@@ -948,8 +942,11 @@ local function IsAutoFarmModeActive()
 end
 
 if HasVIP and IsAutoFarmModeActive() then
-    RuntimeGlobals.VIPVoteSkipOwner = nil
-    UpdateVIPAutoSkip()
+    -- Clear any leftover Auto Skip once when the farm starts. After
+    -- VoteSkip() claims ownership, another API must not force it off.
+    if RuntimeGlobals.VIPVoteSkipOwner == nil then
+        SetAutoSkip(false)
+    end
     StartVIPVoteSkip()
 end
 
