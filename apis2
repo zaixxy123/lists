@@ -922,7 +922,11 @@ local function StartVIPVoteSkip()
         while game.PlaceId ~= LOBBY_PLACE_ID
             and RuntimeGlobals.VIPVoteSkipVersionApis2
                 == VIPVoteSkipVersion do
-            if IsStrategyRuntimeEnabled() then
+            -- Once this API receives VoteSkip, keep honoring that request
+            -- even if the main farm flag is temporarily inactive.
+            local ownsRequest = VoteSkipConfigured
+                and RuntimeGlobals.VIPVoteSkipOwner == VIPVoteSkipController
+            if IsStrategyRuntimeEnabled() or ownsRequest then
                 UpdateVIPAutoSkip()
             end
             task.wait(0.1)
