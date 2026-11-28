@@ -41,11 +41,10 @@ return function(Context)
     local VIP_GAMEPASS_ID = 10518590
 
     local RuntimeGlobals = getgenv()
-    RuntimeGlobals.VIPVoteSkipVersion =
-        (tonumber(RuntimeGlobals.VIPVoteSkipVersion) or 0) + 1
-
-    local VIPVoteSkipVersion =
-        RuntimeGlobals.VIPVoteSkipVersion
+    RuntimeGlobals.VIPVoteSkipVersionTDS =
+        (tonumber(RuntimeGlobals.VIPVoteSkipVersionTDS) or 0) + 1
+    local VIPVoteSkipVersion = RuntimeGlobals.VIPVoteSkipVersionTDS
+    local VIPVoteSkipController = {}
 
     local HasVIP = Context.HasVIP
 
@@ -292,6 +291,7 @@ return function(Context)
         if HasVIP
             and SetAutoSkip then
 
+            RuntimeGlobals.VIPVoteSkipOwner = nil
             SetAutoSkip(false)
 
             if StartVIPVoteSkip then
@@ -844,8 +844,26 @@ return function(Context)
             and voteButton.Position == UDim2.new(0.5, 0, 0.5, 0)
     end
 
+    local function VIPMatchStarted()
+        local rep = GetDirectGameStateReplicator()
+        return rep ~= nil
+            and rep:GetAttribute("GameStarted") == true
+            and rep:GetAttribute("GameOver") ~= true
+    end
+
     local function UpdateVIPAutoSkip()
-        if not VoteSkipConfigured then
+        -- Ready starts a countdown; GameStarted is the actual start.
+        if not VIPMatchStarted() then
+            SetAutoSkip(false)
+            return
+        end
+
+        local owner = RuntimeGlobals.VIPVoteSkipOwner
+        if owner ~= nil and owner ~= VIPVoteSkipController then
+            return
+        end
+
+        if not VoteSkipConfigured or owner ~= VIPVoteSkipController then
             SetAutoSkip(false)
             return
         end
@@ -873,11 +891,13 @@ return function(Context)
         VIPVoteSkipWorkerRunning = true
 
         task.spawn(function()
-            while IsStrategyRuntimeEnabled()
-                and RuntimeGlobals.VIPVoteSkipVersion
+            -- A farm can be enabled after this API loads. Stay ready.
+            while game.PlaceId ~= 3260590327
+                and RuntimeGlobals.VIPVoteSkipVersionTDS
                     == VIPVoteSkipVersion do
-
-                UpdateVIPAutoSkip()
+                if IsStrategyRuntimeEnabled() then
+                    UpdateVIPAutoSkip()
+                end
                 task.wait(0.1)
             end
 
@@ -931,6 +951,7 @@ return function(Context)
             VoteSkipAll = true
 
             if HasVIP then
+                RuntimeGlobals.VIPVoteSkipOwner = VIPVoteSkipController
                 UpdateVIPAutoSkip()
                 StartVIPVoteSkip()
             else
@@ -968,6 +989,7 @@ return function(Context)
         end
 
         if HasVIP then
+            RuntimeGlobals.VIPVoteSkipOwner = VIPVoteSkipController
             UpdateVIPAutoSkip()
             StartVIPVoteSkip()
         else
@@ -1541,6 +1563,10 @@ return function(Context)
     end
     
 
+
+    if HasVIP and game.PlaceId ~= 3260590327 then
+        StartVIPVoteSkip()
+    end
 
     shared.TDSTable = TDS
     shared["TDS_Table"] = TDS
