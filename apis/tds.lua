@@ -47,25 +47,15 @@ return function(Context)
     local VIPVoteSkipController = {}
     local VIPVoteSkipKind = "tds"
 
-    -- Re-executing this API invalidates its old worker, not the other API.
-    if RuntimeGlobals.VIPVoteSkipOwnerKind == VIPVoteSkipKind then
-        RuntimeGlobals.VIPVoteSkipOwner = nil
-        RuntimeGlobals.VIPVoteSkipOwnerKind = nil
-    end
-
     local HasVIP = Context.HasVIP
-
+    local vipCheckError
     if HasVIP == nil then
-        HasVIP = false
-
-        pcall(function()
-            HasVIP = MarketplaceService:UserOwnsGamePassAsync(
-                plr.UserId,
-                VIP_GAMEPASS_ID
-            ) == true
-        end)
+        local ok, result = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, plr.UserId, VIP_GAMEPASS_ID)
+        HasVIP = ok and result == true
+        if not ok then
+            vipCheckError = result
+        end
     end
-
     TDS.HasVIP = HasVIP
 
 
@@ -280,12 +270,10 @@ return function(Context)
 
     local VoteSkipWaves = {}
     local VoteSkipAll = false
-    local VoteSkipConfigured = false
+    local VIPVoteSkipMatch
     local VIPVoteSkipWorkerRunning = false
-    local VIPMatchStarted
     local NormalVoteSkipWorkerRunning = false
-    local SetAutoSkip
-    local StartVIPVoteSkip
+    local ClearVIPVoteSkip
 
     function TDS:ResetIndex()
         self.PlacedTowers = {}
@@ -293,24 +281,7 @@ return function(Context)
         self.StackCounts = {}
 
         table.clear(VoteSkipWaves)
-        VoteSkipAll = false
-        VoteSkipConfigured = false
-
-        if HasVIP
-            and SetAutoSkip then
-
-            if RuntimeGlobals.VIPVoteSkipOwner == VIPVoteSkipController then
-                RuntimeGlobals.VIPVoteSkipOwner = nil
-                RuntimeGlobals.VIPVoteSkipOwnerKind = nil
-            end
-            if not VIPMatchStarted() then
-                SetAutoSkip(false)
-            end
-
-            if StartVIPVoteSkip then
-                StartVIPVoteSkip()
-            end
-        end
+        ClearVIPVoteSkip("ResetIndex cleared request")
     end
 
     function TDS:Place(towerName, x, y, z, ...)
@@ -679,134 +650,121 @@ return function(Context)
         )
     end
 
+    local lastVIPSkipTrace = {}
+
+    local function TraceVIPSkip(event, message)
+        if RuntimeGlobals.TDSVIPSkipDebug == true and lastVIPSkipTrace[event] ~= message then
+            lastVIPSkipTrace[event] = message
+            print(("[VIP Auto Skip %s %s] %s %s"):format(
+                VIPVoteSkipKind, VIPVoteSkipVersion, event, message
+            ))
+        end
+    end
+
+    local function FindAutoSkipButton(settings)
+        local window = settings and settings:FindFirstChild("window")
+        local scroll = window and window:FindFirstChild("scrollingFrame")
+        local category = scroll and scroll:FindFirstChild("Unknown")
+        local setting = category and category:FindFirstChild("Auto Skip")
+        local button = setting and setting:FindFirstChild("button")
+        local toggle = button and button:FindFirstChild("toggle")
+        local imageButton = toggle and toggle:FindFirstChild("imageButton")
+        return imageButton and imageButton:IsA("GuiButton") and imageButton or nil
+    end
+
     local function GetAutoSkipButton()
         local playerGui = plr:FindFirstChild("PlayerGui")
-        local settings = playerGui and playerGui:FindFirstChild("ReactUniversalSettings")
-        local window = settings and settings:FindFirstChild("window")
-        local scrollingFrame = window and window:FindFirstChild("scrollingFrame")
-        local unknown = scrollingFrame and scrollingFrame:FindFirstChild("Unknown")
-        local autoSkip = unknown and unknown:FindFirstChild("Auto Skip")
-        local button = autoSkip and autoSkip:FindFirstChild("button")
-        local toggle = button and button:FindFirstChild("toggle")
+        if not playerGui then
+            return nil, "PlayerGui missing"
+        end
 
-        return toggle and toggle:FindFirstChild("imageButton")
+        local button = FindAutoSkipButton(playerGui:FindFirstChild("ReactUniversalSettings"))
+        if button then
+            return button, "ReactUniversalSettings"
+        end
+
+        local universal = playerGui:FindFirstChild("ReactUniversal")
+        button = FindAutoSkipButton(universal and universal:FindFirstChild("Settings"))
+        return button, button and "ReactUniversal.Settings" or "Auto Skip button missing"
     end
 
-    local function GetAutoSkipState()
-        local button = GetAutoSkipButton()
+    local function ReadAutoSkip(button)
+        local label = button and button:FindFirstChild("contentText")
+        if not label or not (label:IsA("TextLabel") or label:IsA("TextButton")) then
+            return nil, "contentText missing"
+        end
 
+        local text = label.ContentText or label.Text
+        local state = text:match("^%s*(.-)%s*$"):lower()
+        if state == "enabled" then
+            return true, text
+        elseif state == "disabled" then
+            return false, text
+        end
+        return nil, text
+    end
+
+    local function RunAutoSkipConnections(connections)
+        local called = false
+        local lastError
+        for _, connection in ipairs(connections) do
+            local ok, err = pcall(function()
+                connection.Function()
+            end)
+            called = called or ok
+            if not ok then
+                lastError = err
+            end
+        end
+        return called, lastError
+    end
+
+    local function SetAutoSkip(enabled)
+        local button, path = GetAutoSkipButton()
         if not button then
-            return nil
+            TraceVIPSkip("ui", path)
+            return
         end
 
-        local contentText = button:FindFirstChild("contentText")
-
-        if not contentText then
-            return nil
+        local current, label = ReadAutoSkip(button)
+        TraceVIPSkip("ui", path .. " / " .. label)
+        if current == nil or current == enabled then
+            return
         end
 
-        local text = tostring(contentText.Text):lower()
-
-        if text == "enabled" then
-            return true
+        -- A click toggles the value. Let one click settle even if the API reloads.
+        local now = os.clock()
+        if now - (RuntimeGlobals.TDSVIPSkipLastClickAt or -math.huge) < 0.5 then
+            return
         end
+        RuntimeGlobals.TDSVIPSkipLastClickAt = now
 
-        if text == "disabled" then
-            return false
-        end
+        local ok, clicked, reason = pcall(function()
+            if type(getconnections) ~= "function" then
+                return false, "getconnections unavailable"
+            end
+            local down = getconnections(button.MouseButton1Down)
+            local up = getconnections(button.MouseButton1Up)
+            if type(down) ~= "table" or type(up) ~= "table" or #down == 0 or #up == 0 then
+                return false, "MouseButton1Down or MouseButton1Up has no connections"
+            end
 
-        return nil
-    end
-
-    local AutoSkipPendingState = nil
-    local AutoSkipLastClickAt = 0
-
-    local function ToggleAutoSkip()
-        local button =
-            GetAutoSkipButton()
-
-        if not button
-            or type(getconnections) ~= "function" then
-
-            return false
-        end
-
-        local downConnections =
-            getconnections(
-                button.MouseButton1Down
-            )
-
-        local upConnections =
-            getconnections(
-                button.MouseButton1Up
-            )
-
-        if #downConnections == 0
-            or #upConnections == 0 then
-
-            return false
-        end
-
-        for _, connection in ipairs(
-            downConnections
-        ) do
-            pcall(function()
-                connection.Function()
-            end)
-        end
-
-        task.wait(0.05)
-
-        for _, connection in ipairs(
-            upConnections
-        ) do
-            pcall(function()
-                connection.Function()
-            end)
-        end
-
-        return true
-    end
-
-    SetAutoSkip = function(enabled)
-        enabled = enabled == true
-
-        local current = GetAutoSkipState()
-
-        if current == nil then
-            return false
-        end
-
-        if current == enabled then
-            AutoSkipPendingState = nil
-            return true
-        end
-
-        if AutoSkipPendingState == enabled
-            and os.clock() - AutoSkipLastClickAt < 0.5 then
-
-            return false
-        end
-
-        AutoSkipPendingState = enabled
-        AutoSkipLastClickAt = os.clock()
-
-        if not ToggleAutoSkip() then
-            AutoSkipPendingState = nil
-            return false
-        end
+            local downCalled, downError = RunAutoSkipConnections(down)
+            task.wait(0.05)
+            local upCalled, upError = RunAutoSkipConnections(up)
+            return downCalled and upCalled, downError or upError
+        end)
 
         task.wait(0.15)
-
-        current = GetAutoSkipState()
-
-        if current == enabled then
-            AutoSkipPendingState = nil
-            return true
-        end
-
-        return false
+        local currentButton = GetAutoSkipButton()
+        local observed = ReadAutoSkip(currentButton)
+        TraceVIPSkip("toggle", ("requested=%s observed=%s callbacks=%s error=%s"):format(
+            tostring(enabled), tostring(observed), tostring(ok and clicked),
+            tostring(if ok then reason else clicked)
+        ))
     end
+
+    TraceVIPSkip("vip", ("ownsPass=%s error=%s"):format(tostring(HasVIP), tostring(vipCheckError)))
 
     local function GetTopGameDisplayFrame()
         local playerGui = plr:FindFirstChild("PlayerGui")
@@ -857,69 +815,84 @@ return function(Context)
             and voteButton.Position == UDim2.new(0.5, 0, 0.5, 0)
     end
 
-    VIPMatchStarted = function()
+    ClearVIPVoteSkip = function(reason)
+        VoteSkipAll = false
+        VIPVoteSkipMatch = nil
+        if RuntimeGlobals.VIPVoteSkipOwner == VIPVoteSkipController then
+            RuntimeGlobals.VIPVoteSkipOwner = nil
+            RuntimeGlobals.VIPVoteSkipOwnerKind = nil
+            TraceVIPSkip("request", reason)
+        end
+    end
+
+    local function UpdateVIPAutoSkip(ownsRequest)
         local rep = GetDirectGameStateReplicator()
-        return rep ~= nil
-            and rep:GetAttribute("GameStarted") == true
-            and rep:GetAttribute("GameOver") ~= true
+        if not rep then
+            TraceVIPSkip("state", "GameStateReplicator missing")
+            return
+        end
+
+        local started = rep:GetAttribute("GameStarted")
+        local gameOver = rep:GetAttribute("GameOver") == true
+        if ownsRequest and VIPVoteSkipMatch
+            and (rep ~= VIPVoteSkipMatch or gameOver or started == false) then
+            table.clear(VoteSkipWaves)
+            ClearVIPVoteSkip("previous match ended")
+            ownsRequest = false
+        end
+
+        local desired, wave
+        if started == false then
+            desired = false
+        elseif started == true and not gameOver and ownsRequest then
+            VIPVoteSkipMatch = rep
+            if VoteSkipAll then
+                desired = true
+            else
+                wave = GetCurrentWaveNoWait()
+                desired = VoteSkipWaves[math.max(wave or 1, 1)] == true
+            end
+        end
+
+        if RuntimeGlobals.TDSVIPSkipDebug == true then
+            TraceVIPSkip("state", ("GameStarted=%s GameOver=%s ownsRequest=%s wave=%s desired=%s"):format(
+                tostring(started), tostring(gameOver), tostring(ownsRequest), tostring(wave), tostring(desired)
+            ))
+        end
+        if desired ~= nil then
+            SetAutoSkip(desired)
+        end
     end
 
-    local function UpdateVIPAutoSkip()
-        -- Ready starts a countdown; GameStarted is the actual start.
-        if not VIPMatchStarted() then
-            SetAutoSkip(false)
-            return
-        end
-
-        local owner = RuntimeGlobals.VIPVoteSkipOwner
-        if owner ~= nil and owner ~= VIPVoteSkipController then
-            return
-        end
-
-        -- Once the game starts, leave the setting unchanged until VoteSkip.
-        if not VoteSkipConfigured or owner ~= VIPVoteSkipController then
-            return
-        end
-
-        if VoteSkipAll then
-            SetAutoSkip(true)
-            return
-        end
-
-        local currentWave = GetCurrentWaveNoWait()
-
-        if not currentWave or currentWave <= 0 then
-            SetAutoSkip(VoteSkipWaves[1] == true)
-            return
-        end
-
-        SetAutoSkip(VoteSkipWaves[currentWave] == true)
-    end
-
-    StartVIPVoteSkip = function()
-        if VIPVoteSkipWorkerRunning then
+    local function StartVIPVoteSkip()
+        if VIPVoteSkipWorkerRunning or game.PlaceId == 3260590327 then
             return
         end
 
         VIPVoteSkipWorkerRunning = true
-
         task.spawn(function()
-            -- A farm can be enabled after this API loads. Stay ready.
-            while game.PlaceId ~= 3260590327
-                and RuntimeGlobals.VIPVoteSkipVersionTDS
-                    == VIPVoteSkipVersion do
-                -- Once this API receives VoteSkip, keep honoring that request
-                -- even if the main farm flag is temporarily inactive.
-                local ownsRequest = VoteSkipConfigured
-                    and RuntimeGlobals.VIPVoteSkipOwner == VIPVoteSkipController
-                if IsStrategyRuntimeEnabled() or ownsRequest then
-                    UpdateVIPAutoSkip()
+            while game.PlaceId ~= 3260590327 do
+                local owner = RuntimeGlobals.VIPVoteSkipOwner
+                local ownsRequest = owner == VIPVoteSkipController
+                local latest = RuntimeGlobals.VIPVoteSkipVersionTDS == VIPVoteSkipVersion
+                -- Keep the API that received the request alive through other installs.
+                if not ownsRequest and not latest then
+                    break
+                end
+                if ownsRequest or (owner == nil and IsStrategyRuntimeEnabled()) then
+                    UpdateVIPAutoSkip(ownsRequest)
                 end
                 task.wait(0.1)
             end
-
             VIPVoteSkipWorkerRunning = false
         end)
+    end
+
+    local function RecordVIPVoteSkip(request)
+        RuntimeGlobals.VIPVoteSkipOwner = VIPVoteSkipController
+        RuntimeGlobals.VIPVoteSkipOwnerKind = VIPVoteSkipKind
+        TraceVIPSkip("request", request)
+        StartVIPVoteSkip()
     end
 
     local function StartNormalVoteSkip()
@@ -962,16 +935,11 @@ return function(Context)
     end
 
     function TDS:VoteSkip(startWave, endWave)
-        VoteSkipConfigured = true
-
         if startWave == nil and endWave == nil then
             VoteSkipAll = true
 
             if HasVIP then
-                RuntimeGlobals.VIPVoteSkipOwner = VIPVoteSkipController
-                RuntimeGlobals.VIPVoteSkipOwnerKind = VIPVoteSkipKind
-                UpdateVIPAutoSkip()
-                StartVIPVoteSkip()
+                RecordVIPVoteSkip("all waves")
             else
                 StartDirectAutoSkip()
             end
@@ -1007,10 +975,7 @@ return function(Context)
         end
 
         if HasVIP then
-            RuntimeGlobals.VIPVoteSkipOwner = VIPVoteSkipController
-            RuntimeGlobals.VIPVoteSkipOwnerKind = VIPVoteSkipKind
-            UpdateVIPAutoSkip()
-            StartVIPVoteSkip()
+            RecordVIPVoteSkip(("waves %d through %d"):format(startWave, endWave))
         else
             StartNormalVoteSkip()
         end
@@ -1019,21 +984,7 @@ return function(Context)
     end
 
     function TDS:Ready()
-        local ready = DirectReady()
-
-        -- VoteSkip can execute before Ready. Restore its requested VIP state
-        -- immediately after DirectReady observes GameStarted == true.
-        if ready and HasVIP and VoteSkipConfigured then
-            if RuntimeGlobals.VIPVoteSkipOwner == nil then
-                RuntimeGlobals.VIPVoteSkipOwner = VIPVoteSkipController
-                RuntimeGlobals.VIPVoteSkipOwnerKind = VIPVoteSkipKind
-            end
-
-            UpdateVIPAutoSkip()
-            StartVIPVoteSkip()
-        end
-
-        return ready
+        return DirectReady()
     end
 
     function TDS:Upgrade(index, path)
