@@ -223,7 +223,17 @@ local function ReadDirectStat(name)
     return nil
 end
 
-local ExperienceNeeded
+-- The live level shown by Level can lag during matches. Treat it as the
+-- baseline for accumulated Experience, not as the final account level.
+local function GetXPForNextAccountLevel(nextLevel)
+    if nextLevel > 40 then
+        return math.floor(260 + nextLevel * 1.5 + 0.5)
+    elseif nextLevel > 10 then
+        return nextLevel * 8
+    end
+    return math.floor(45 + nextLevel * 3.5 + 0.5)
+end
+
 local function GetLevelFromExperience()
     local levelValue = LocalPlayer:FindFirstChild("Level")
     local experienceValue = LocalPlayer:FindFirstChild("Experience")
@@ -231,37 +241,25 @@ local function GetLevelFromExperience()
         return nil
     end
 
-    local level = tonumber(levelValue.Value)
-    local xp = tonumber(experienceValue.Value)
-    if not level or level < 0 or not xp or xp < 0 then
+    local baseLevel = tonumber(levelValue.Value)
+    local experience = tonumber(experienceValue.Value)
+    if not baseLevel or baseLevel < 0 or not experience or experience < 0 then
         return nil
     end
 
-    if not ExperienceNeeded then
-        local sharedFolder = ReplicatedStorage:FindFirstChild("Shared")
-        local modules = sharedFolder and sharedFolder:FindFirstChild("Modules")
-        local module = modules and modules:FindFirstChild("Experience")
-        if not module then
-            return nil
-        end
-        local ok, result = pcall(require, module)
-        if not ok or type(result) ~= "function" then
-            return nil
-        end
-        ExperienceNeeded = result
+    baseLevel = math.floor(baseLevel)
+    local totalXP = experience
+    for i = 1, baseLevel do
+        totalXP += GetXPForNextAccountLevel(i)
     end
 
-    level = math.floor(level)
-    for _ = 1, 1000 do
-        local ok, needed = pcall(ExperienceNeeded, level)
-        needed = ok and tonumber(needed) or nil
-        if not needed or needed <= 0 then
-            return nil
+    local level = 0
+    while level < 100000 do
+        local required = GetXPForNextAccountLevel(level + 1)
+        if totalXP < required then
+            return level
         end
-        if xp < needed then
-            break
-        end
-        xp -= needed
+        totalXP -= required
         level += 1
     end
     return level
@@ -287,15 +285,11 @@ local function GetProgressSnapshot()
         end
     end
 
-    if game.PlaceId ~= LOBBY_PLACE_ID then
-        local rep = GetGameReplicator()
-        if rep and rep:GetAttribute("GameOver") == true then
-            local experienceLevel = GetLevelFromExperience()
-            if experienceLevel ~= nil then
-                snapshot.Level = experienceLevel
-            end
-        end
-    else
+    -- Calculate the current level in both lobby and matches, even before GameOver.
+    local experienceLevel = GetLevelFromExperience()
+    if experienceLevel ~= nil then
+        snapshot.Level = experienceLevel
+    elseif game.PlaceId == LOBBY_PLACE_ID then
         local liveLevel = ReadDirectStat("Level")
         if liveLevel ~= nil and liveLevel >= 0 then
             snapshot.Level = liveLevel
@@ -471,14 +465,9 @@ local function GetRewardScreenLevel()
 end
 
 local function GetCurrentLevel()
-    if game.PlaceId ~= LOBBY_PLACE_ID then
-        local rep = GetGameReplicator()
-        if rep and rep:GetAttribute("GameOver") == true then
-            local experienceLevel = GetLevelFromExperience()
-            if experienceLevel ~= nil then
-                return experienceLevel
-            end
-        end
+    local experienceLevel = GetLevelFromExperience()
+    if experienceLevel ~= nil then
+        return experienceLevel
     end
 
     local snapshot = GetProgressSnapshot()
